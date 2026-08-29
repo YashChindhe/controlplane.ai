@@ -88,7 +88,7 @@ Each milestone is a shippable unit — at the end of every milestone, the system
 
 ---
 
-### Milestone 1.4 — Governance Dashboard v1 (Weeks 7–9) [IN PROGRESS]
+### Milestone 1.4 — Governance Dashboard v1 (Weeks 7–9) [COMPLETED]
 
 **Goal**: Build the core real-time observability UI. Engineers and executives can see what's happening across all AI outputs in real time.
 
