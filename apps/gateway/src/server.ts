@@ -1,8 +1,10 @@
 import Fastify from 'fastify';
+import fastifyWebsocket from '@fastify/websocket';
 import { onRequestHook, onResponseHook } from './middleware/request-log.js';
 import { registerRateLimiter } from './middleware/rate-limiter.js';
 import { healthRoutes } from './routes/health.js';
 import { chatRoutes } from './routes/chat.js';
+import { dashboardWebsocketRoutes } from './routes/dashboard-ws.js';
 import { initializeKafka, shutdownKafka } from './services/kafka.js';
 
 const fastify = Fastify({
@@ -22,6 +24,9 @@ const fastify = Fastify({
   }
 });
 
+// Register WebSocket Support
+await fastify.register(fastifyWebsocket);
+
 // Register request logging hooks
 fastify.addHook('onRequest', onRequestHook);
 fastify.addHook('onResponse', onResponseHook);
@@ -35,6 +40,9 @@ await registerRateLimiter(fastify, redisUrl);
 
 // Chat routes
 await fastify.register(chatRoutes);
+
+// Register WebSocket routes
+await fastify.register(dashboardWebsocketRoutes);
 
 const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 const host = process.env.HOST || '0.0.0.0';
@@ -52,4 +60,3 @@ try {
   fastify.log.error(err);
   process.exit(1);
 }
-

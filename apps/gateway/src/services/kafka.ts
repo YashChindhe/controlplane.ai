@@ -3,6 +3,17 @@ import { Kafka, Producer } from 'kafkajs';
 const kafkaBroker = process.env.KAFKA_BROKERS || 'localhost:19092';
 
 let producer: Producer | null = null;
+const eventListeners: ((event: Record<string, any>) => void)[] = [];
+
+export function subscribeToLocalEvents(listener: (event: Record<string, any>) => void) {
+  eventListeners.push(listener);
+  return () => {
+    const idx = eventListeners.indexOf(listener);
+    if (idx !== -1) {
+      eventListeners.splice(idx, 1);
+    }
+  };
+}
 
 export async function initializeKafka(): Promise<void> {
   try {
@@ -26,6 +37,15 @@ export async function initializeKafka(): Promise<void> {
 }
 
 export async function publishAuditEvent(event: Record<string, any>): Promise<void> {
+  // Always notify local listeners (WebSockets) in addition to Kafka
+  eventListeners.forEach(listener => {
+    try {
+      listener(event);
+    } catch (err) {
+      console.error('Error in local event listener:', err);
+    }
+  });
+
   if (!producer) {
     console.warn('Kafka producer not connected. Audit event skipped:', event.eventId);
     return;
