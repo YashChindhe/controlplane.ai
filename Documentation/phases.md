@@ -37,25 +37,25 @@ Each milestone is a shippable unit — at the end of every milestone, the system
 
 ---
 
-### Milestone 1.2 — Tri-Guard Service Foundation & Stream Interception (Weeks 3–4)
+### Milestone 1.2 — Tri-Guard Service Foundation & Stream Interception (Weeks 3–4) [COMPLETED]
 
 **Goal**: Wire up the evaluation pipeline. Guards are stubbed (return mock scores), but the interception loop, chunk buffering, and Action Matrix resolver are real.
 
 **Deliverables**:
-- `apps/tri-guard/` — Python + FastAPI service
-  - Stub Performance Guard: returns mock score 0–100 based on keyword heuristics
-  - Stub Cost Guard: returns real token count + mock density score
-  - Stub Responsibility Guard: returns real regex PII detection (Presidio, basic config)
-  - Internal gRPC/HTTP endpoint: `/evaluate` (accepts chunk, returns verdict in <10ms)
-- `apps/gateway/` — Stream Interception Loop
-  - `stream-interceptor.ts`: sliding 50-token evaluation window
-  - Async call to Tri-Guard service per window (non-blocking — stream continues)
-  - Verdict Aggregator: merges three scores per evaluation cycle
-  - Action Matrix resolver: resolves action from verdict + policy thresholds
-  - Action: "pass" (forward chunk), "flag" (forward + log event), "block" (terminate stream)
-  - Action: "redact" (regex mask + forward modified chunk) — Responsibility Guard only at this stage
-- Kafka setup in docker-compose: audit events written to Kafka topic
-- Structured audit event schema defined (JSON schema)
+- [x] `apps/tri-guard/` — Python + FastAPI service
+  - [x] Stub Performance Guard: returns mock score 0–100 based on keyword heuristics
+  - [x] Stub Cost Guard: returns real token count + mock density score
+  - [x] Stub Responsibility Guard: returns real regex PII detection (basic config)
+  - [x] Internal gRPC/HTTP endpoint: `/evaluate` (accepts chunk, returns verdict in <10ms)
+- [x] `apps/gateway/` — Stream Interception Loop
+  - [x] `stream-interceptor.ts`: sliding 50-token evaluation window
+  - [x] Async call to Tri-Guard service per window (non-blocking — stream continues)
+  - [x] Verdict Aggregator: merges three scores per evaluation cycle
+  - [x] Action Matrix resolver: resolves action from verdict + policy thresholds
+  - [x] Action: "pass" (forward chunk), "flag" (forward + log event), "block" (terminate stream)
+  - [x] Action: "redact" (regex mask + forward modified chunk) — Responsibility Guard only at this stage
+- [x] Kafka setup in docker-compose: audit events written to Kafka topic
+- [x] Structured audit event schema defined (JSON schema)
 
 **Success Criteria**: Stream interception is active. PII in a response is detected and redacted inline. Blocking works (stream terminates, caller receives GovernanceViolation error). Evaluation latency < 50ms p99 (stub guards only).
 

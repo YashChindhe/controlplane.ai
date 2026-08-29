@@ -1,0 +1,108 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AuditEvent",
+  "type": "object",
+  "properties": {
+    "eventId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "tenantId": {
+      "type": "string"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "model": {
+      "type": "string"
+    },
+    "request": {
+      "type": "object",
+      "properties": {
+        "messages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "role": {
+                "type": "string",
+                "enum": ["system", "user", "assistant", "tool"]
+              },
+              "content": {
+                "type": "string"
+              }
+            },
+            "required": ["role"]
+          }
+        }
+      },
+      "required": ["messages"]
+    },
+    "response": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "redacted": {
+          "type": "boolean"
+        },
+        "blocked": {
+          "type": "boolean"
+        }
+      },
+      "required": ["text", "redacted", "blocked"]
+    },
+    "evaluation": {
+      "type": "object",
+      "properties": {
+        "performance": {
+          "type": "object",
+          "properties": {
+            "score": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            }
+          },
+          "required": ["score"]
+        },
+        "cost": {
+          "type": "object",
+          "properties": {
+            "tokens": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "density": {
+              "type": "number"
+            }
+          },
+          "required": ["tokens", "density"]
+        },
+        "responsibility": {
+          "type": "object",
+          "properties": {
+            "hasPii": {
+              "type": "boolean"
+            },
+            "matchedEntities": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["hasPii", "matchedEntities"]
+        },
+        "action": {
+          "type": "string",
+          "enum": ["pass", "flag", "block", "redact"]
+        }
+      },
+      "required": ["performance", "cost", "responsibility", "action"]
+    }
+  },
+  "required": ["eventId", "tenantId", "timestamp", "model", "request", "response", "evaluation"]
+}

@@ -1,5 +1,7 @@
 import { request as undiciRequest } from 'undici';
 import { FastifyReply, FastifyRequest } from 'fastify';
+import { createInterceptorStream } from './stream-interceptor.js';
+import { Readable } from 'stream';
 
 interface UpstreamConfig {
   url: string;
@@ -37,7 +39,12 @@ export function resolveUpstream(request: FastifyRequest): UpstreamConfig {
 
 export async function proxyToUpstream(request: FastifyRequest, reply: FastifyReply) {
   const { url, headers } = resolveUpstream(request);
-  const requestBody = JSON.stringify(request.body);
+  const requestBodyObj = request.body as any;
+  const requestBody = JSON.stringify(requestBodyObj);
+  const isStreaming = !!requestBodyObj?.stream;
+  const tenantId = (request as any).tenantId || 'default-tenant';
+  const model = requestBodyObj?.model || 'unknown-model';
+  const messages = requestBodyObj?.messages || [];
 
   try {
     request.log.info({ url }, 'Proxying request to upstream LLM');
@@ -73,6 +80,15 @@ export async function proxyToUpstream(request: FastifyRequest, reply: FastifyRep
 
     reply.header('access-control-allow-origin', '*');
 
+    if (isStreaming && upstreamRes.statusCode === 200) {
+      const interceptedStream = createInterceptorStream(upstreamRes.body as Readable, {
+        tenantId,
+        model,
+        requestMessages: messages
+      });
+      return reply.send(interceptedStream);
+    }
+
     return reply.send(upstreamRes.body);
 
   } catch (error) {
@@ -86,3 +102,4 @@ export async function proxyToUpstream(request: FastifyRequest, reply: FastifyRep
     });
   }
 }
+
