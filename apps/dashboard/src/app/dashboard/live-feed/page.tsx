@@ -72,34 +72,90 @@ const MOCK_EVENTS: AuditEvent[] = [
 ];
 
 export default function LiveFeedPage() {
-  const [events, setEvents] = useState<AuditEvent[]>(MOCK_EVENTS);
+  const [events, setEvents] = useState<AuditEvent[]>([]);
   const [connected, setConnected] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'all' | 'pass' | 'flag' | 'block' | 'redact'>('all');
+  const [useMockData, setUseMockData] = useState(false);
 
   useEffect(() => {
-    const ws = new WebSocket('ws://localhost:3000/ws/events');
-
-    ws.onopen = () => {
-      setConnected(true);
-      console.log('Connected to gateway WebSocket audit log');
+    const checkState = () => {
+      const mock = localStorage.getItem('useMockData');
+      setUseMockData(mock === 'true');
     };
-
-    ws.onmessage = (event) => {
-      try {
-        const parsedEvent = JSON.parse(event.data) as AuditEvent;
-        setEvents((prev) => [parsedEvent, ...prev].slice(0, 100)); // Cap at 100
-      } catch (err) {
-        console.error('Failed to parse WebSocket audit event:', err);
-      }
-    };
-
-    ws.onclose = () => {
-      setConnected(false);
-      console.log('Disconnected from gateway WebSocket audit log');
-    };
-
-    return () => ws.close();
+    checkState();
+    window.addEventListener('storage', checkState);
+    return () => window.removeEventListener('storage', checkState);
   }, []);
+
+  useEffect(() => {
+    if (useMockData) {
+      setEvents(MOCK_EVENTS);
+      setConnected(true);
+      return;
+    }
+
+    // Clear mock events when switching to live mode
+    setEvents([]);
+
+    let ws: WebSocket | null = null;
+    let retryCount = 0;
+    const maxRetries = 5;
+    let retryTimeoutId: ReturnType<typeof setTimeout> | null = null;
+    let isMounted = true;
+
+    function connect() {
+      if (!isMounted) return;
+
+      ws = new WebSocket('ws://localhost:3000/ws/events');
+
+      ws.onopen = () => {
+        if (!isMounted) return;
+        setConnected(true);
+        retryCount = 0; // Reset on successful connection
+        console.log('Connected to gateway WebSocket audit log');
+      };
+
+      ws.onmessage = (event) => {
+        if (!isMounted) return;
+        try {
+          const parsedEvent = JSON.parse(event.data) as AuditEvent;
+          setEvents((prev) => [parsedEvent, ...prev].slice(0, 100));
+        } catch (err) {
+          console.error('Failed to parse WebSocket audit event:', err);
+        }
+      };
+
+      ws.onclose = () => {
+        if (!isMounted) return;
+        setConnected(false);
+        console.log('Disconnected from gateway WebSocket audit log');
+
+        // Exponential backoff reconnection per rules.md
+        // Max 5 retries: 1s, 2s, 4s, 8s, 16s (capped at 30s)
+        if (retryCount < maxRetries) {
+          const delay = Math.min(1000 * Math.pow(2, retryCount), 30000);
+          retryCount++;
+          console.log(`Retrying WebSocket connection in ${delay}ms (attempt ${retryCount}/${maxRetries})`);
+          retryTimeoutId = setTimeout(connect, delay);
+        } else {
+          console.warn('Max WebSocket reconnection attempts reached. Enable Mock Data to preview the UI.');
+        }
+      };
+
+      ws.onerror = (err) => {
+        console.error('WebSocket error:', err);
+        // onclose will fire after onerror — reconnection handled there
+      };
+    }
+
+    connect();
+
+    return () => {
+      isMounted = false;
+      if (retryTimeoutId) clearTimeout(retryTimeoutId);
+      if (ws) ws.close();
+    };
+  }, [useMockData]);
 
   const getActionBadge = (action: AuditEvent['evaluation']['action']) => {
     switch (action) {

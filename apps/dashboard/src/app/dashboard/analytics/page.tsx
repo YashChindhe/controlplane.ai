@@ -16,7 +16,7 @@ import {
 } from 'recharts';
 import { TrendingUp, DollarSign, Cpu, AlertTriangle } from 'lucide-react';
 
-const riskTimelineData = [
+const MOCK_TIMELINE = [
   { time: '12:00', performance: 95, cost: 45, responsibility: 98 },
   { time: '13:00', performance: 92, cost: 55, responsibility: 99 },
   { time: '14:00', performance: 88, cost: 60, responsibility: 98 },
@@ -26,7 +26,7 @@ const riskTimelineData = [
   { time: '18:00', performance: 95, cost: 50, responsibility: 99 },
 ];
 
-const modelVolumeData = [
+const MOCK_VOLUME = [
   { name: 'gpt-4o', safe: 400, flagged: 24, blocked: 4 },
   { name: 'claude-3-5-sonnet', safe: 300, flagged: 18, blocked: 2 },
   { name: 'gpt-3.5-turbo', safe: 580, flagged: 45, blocked: 12 },
@@ -34,6 +34,100 @@ const modelVolumeData = [
 ];
 
 export default function AnalyticsPage() {
+  const [useMockData, setUseMockData] = React.useState(false);
+  const [timelineData, setTimelineData] = React.useState<any[]>([]);
+  const [volumeData, setVolumeData] = React.useState<any[]>([]);
+  const [kpis, setKpis] = React.useState({ latency: 0, efficiency: 0, spend: 0, blocked: 0 });
+
+  React.useEffect(() => {
+    const checkState = () => {
+      const mock = localStorage.getItem('useMockData');
+      setUseMockData(mock === 'true');
+    };
+    checkState();
+    window.addEventListener('storage', checkState);
+    return () => window.removeEventListener('storage', checkState);
+  }, []);
+
+  React.useEffect(() => {
+    async function fetchLiveData() {
+      if (useMockData) {
+        setTimelineData(MOCK_TIMELINE);
+        setVolumeData(MOCK_VOLUME);
+        setKpis({ latency: 38, efficiency: 84.2, spend: 184.22, blocked: 19 });
+        return;
+      }
+
+      try {
+        const res = await fetch('http://localhost:8002/audit', {
+          headers: { 'tenant-id': 'default' }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const events = data.events || [];
+          
+          if (events.length === 0) {
+            setTimelineData([]);
+            setVolumeData([]);
+            setKpis({ latency: 0, efficiency: 0, spend: 0, blocked: 0 });
+            return;
+          }
+
+          // Compute KPIs
+          let totalDensity = 0;
+          let totalTokens = 0;
+          let blockedCount = 0;
+          
+          events.forEach((e: any) => {
+            const evalData = e.evaluation || {};
+            totalDensity += evalData.cost?.density || 1;
+            totalTokens += evalData.cost?.tokens || 0;
+            if (evalData.action === 'block') blockedCount++;
+          });
+
+          const avgEfficiency = (totalDensity / events.length) * 100;
+          const totalSpend = totalTokens * 0.00015; // Mock rate of $0.00015 per token
+
+          setKpis({ 
+            latency: 42, // Latency telemetry not yet in gateway emit
+            efficiency: parseFloat(avgEfficiency.toFixed(1)), 
+            spend: parseFloat(totalSpend.toFixed(4)), 
+            blocked: blockedCount 
+          });
+
+          // Compute Timeline Data (grouping sequentially for the demo)
+          const timeline = events.slice(0, 10).reverse().map((e: any, idx: number) => {
+            const evalData = e.evaluation || {};
+            return {
+              time: new Date(e.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+              performance: evalData.performance?.score || 100,
+              cost: Math.min((evalData.cost?.tokens || 0) * 2, 100), // Scaled for chart visibility
+              responsibility: evalData.responsibility?.hasPii ? 40 : 100
+            };
+          });
+          setTimelineData(timeline);
+
+          // Compute Volume Data grouped by Model
+          const modelMap: Record<string, any> = {};
+          events.forEach((e: any) => {
+            const model = e.model || 'unknown';
+            const action = e.evaluation?.action || 'pass';
+            if (!modelMap[model]) {
+              modelMap[model] = { name: model, safe: 0, flagged: 0, blocked: 0 };
+            }
+            if (action === 'pass') modelMap[model].safe++;
+            else if (action === 'block') modelMap[model].blocked++;
+            else modelMap[model].flagged++; // redact and flag
+          });
+          setVolumeData(Object.values(modelMap));
+        }
+      } catch (err) {
+        console.error("Failed to fetch analytics:", err);
+      }
+    }
+    fetchLiveData();
+  }, [useMockData]);
+
   return (
     <DashboardLayout>
       <div className="page-header">
@@ -50,8 +144,8 @@ export default function AnalyticsPage() {
             <span className="kpi-title">Average Latency</span>
             <Cpu className="kpi-icon violet" />
           </div>
-          <div className="kpi-value font-mono">38ms</div>
-          <span className="kpi-trend positive"><TrendingUp size={12} /> -5.2% vs last 24h</span>
+          <div className="kpi-value font-mono">{kpis.latency}ms</div>
+          {useMockData && <span className="kpi-trend positive"><TrendingUp size={12} /> -5.2% vs last 24h</span>}
         </div>
 
         <div className="kpi-card">
@@ -59,8 +153,8 @@ export default function AnalyticsPage() {
             <span className="kpi-title">Token Efficiency</span>
             <TrendingUp className="kpi-icon green" />
           </div>
-          <div className="kpi-value font-mono">84.2%</div>
-          <span className="kpi-trend positive"><TrendingUp size={12} /> +1.4% vs last 24h</span>
+          <div className="kpi-value font-mono">{kpis.efficiency}%</div>
+          {useMockData && <span className="kpi-trend positive"><TrendingUp size={12} /> +1.4% vs last 24h</span>}
         </div>
 
         <div className="kpi-card">
@@ -68,8 +162,8 @@ export default function AnalyticsPage() {
             <span className="kpi-title">Projected Spend</span>
             <DollarSign className="kpi-icon blue" />
           </div>
-          <div className="kpi-value font-mono">$184.22</div>
-          <span className="kpi-trend negative"><TrendingUp size={12} /> +12.5% vs last 24h</span>
+          <div className="kpi-value font-mono">${kpis.spend.toFixed(4)}</div>
+          {useMockData && <span className="kpi-trend negative"><TrendingUp size={12} /> +12.5% vs last 24h</span>}
         </div>
 
         <div className="kpi-card">
@@ -77,8 +171,8 @@ export default function AnalyticsPage() {
             <span className="kpi-title">Blocked Violations</span>
             <AlertTriangle className="kpi-icon red" />
           </div>
-          <div className="kpi-value font-mono">19</div>
-          <span className="kpi-trend positive"><TrendingUp size={12} /> -2% vs last 24h</span>
+          <div className="kpi-value font-mono">{kpis.blocked}</div>
+          {useMockData && <span className="kpi-trend positive"><TrendingUp size={12} /> -2% vs last 24h</span>}
         </div>
       </div>
 
@@ -88,7 +182,7 @@ export default function AnalyticsPage() {
           <h3 className="chart-title">Risk Timeline (Last 24 Hours)</h3>
           <div className="chart-container">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={riskTimelineData}>
+              <LineChart data={timelineData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
                 <XAxis dataKey="time" stroke="var(--text-tertiary)" fontSize={11} />
                 <YAxis stroke="var(--text-tertiary)" fontSize={11} />
@@ -109,7 +203,7 @@ export default function AnalyticsPage() {
           <h3 className="chart-title">Model Interceptions Breakdown</h3>
           <div className="chart-container">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={modelVolumeData}>
+              <BarChart data={volumeData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
                 <XAxis dataKey="name" stroke="var(--text-tertiary)" fontSize={11} />
                 <YAxis stroke="var(--text-tertiary)" fontSize={11} />

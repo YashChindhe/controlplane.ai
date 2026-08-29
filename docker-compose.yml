@@ -48,10 +48,10 @@ services:
     volumes:
       - redpanda_data:/var/lib/redpanda
     healthcheck:
-      test: ["CMD", "rpk", "cluster", "info"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+      test: ["CMD-SHELL", "rpk cluster info --brokers=localhost:19092 || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
 
   policy-service:
     build:
@@ -59,6 +59,7 @@ services:
     container_name: controlplane-policy-service
     environment:
       - DATABASE_URL=postgresql+asyncpg://postgres:postgrespassword@postgres:5432/controlplane
+      - PYTHONPATH=/app
     ports:
       - "8001:8001"
     depends_on:
@@ -72,57 +73,14 @@ services:
     environment:
       - KAFKA_BROKERS=redpanda:9092
       - ELASTICSEARCH_URL=http://localhost:9200
+      - PYTHONPATH=/app
     ports:
       - "8002:8002"
     depends_on:
       redpanda:
         condition: service_healthy
 
-  gateway:
-    build:
-      context: .
-      dockerfile: ./apps/gateway/Dockerfile
-    container_name: controlplane-gateway
-    environment:
-      - PORT=3000
-      - HOST=0.0.0.0
-      - REDIS_URL=redis://redis:6379
-      - KAFKA_BROKERS=redpanda:9092
-      - TRI_GUARD_URL=http://host.docker.internal:8000
-      - POLICY_SERVICE_URL=http://policy-service:8001
-      - AUDIT_SERVICE_URL=http://audit-service:8002
-    ports:
-      - "3000:3000"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      redpanda:
-        condition: service_healthy
-      policy-service:
-        condition: service_started
-      audit-service:
-        condition: service_started
-
-  dashboard:
-    build:
-      context: .
-      dockerfile: ./apps/dashboard/Dockerfile
-    container_name: controlplane-dashboard
-    ports:
-      - "3001:3001"
-    environment:
-      - PORT=3001
-      - HOST=0.0.0.0
-    depends_on:
-      - gateway
-
 volumes:
   postgres_data:
   redis_data:
   redpanda_data:
-
-

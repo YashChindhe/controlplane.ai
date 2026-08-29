@@ -24,6 +24,20 @@ const fastify = Fastify({
   }
 });
 
+import fastifyCors from '@fastify/cors';
+
+// Register CORS — allow all localhost origins for local dev
+await fastify.register(fastifyCors, {
+  origin: [
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:3001',
+  ],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key', 'x-openai-api-key', 'x-anthropic-api-key', 'x-upstream-url', 'tenant-id'],
+});
+
 // Register WebSocket Support
 await fastify.register(fastifyWebsocket);
 
@@ -55,7 +69,7 @@ fastify.addHook('onClose', async () => {
 try {
   await initializeKafka();
   await fastify.listen({ port, host });
-  fastify.log.info(`Gateway server listening on http://${host}/${port}`);
+  fastify.log.info(`Gateway server listening on http://${host}:${port}`);
 } catch (err) {
   fastify.log.error(err);
   process.exit(1);

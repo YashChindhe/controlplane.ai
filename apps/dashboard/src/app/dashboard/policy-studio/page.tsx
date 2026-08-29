@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Sliders, Plus, Play, ShieldAlert, Archive, FileText, CheckCircle, Trash2, Import } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Sliders, Plus, Play, ShieldAlert, Archive, FileText, CheckCircle, Trash2, Import, ArrowLeft } from 'lucide-react';
 
 interface Rule {
   id: number;
@@ -17,49 +18,87 @@ interface Rule {
   is_active: boolean;
 }
 
-export default function PolicyStudio() {
-  const [rules, setRules] = useState<Rule[]>([
-    // Seed mock data matching our system
-    { id: 1, rule_uuid: "rule-1", name: "Redact US Phone Numbers", guard: "responsibility", field: "PHONE_NUMBER", operator: "contains", threshold: "1", action: "redact", version: 1, status: "production", is_active: true },
-    { id: 2, rule_uuid: "rule-2", name: "Block Hallucination > 80%", guard: "performance", field: "hallucination_score", operator: ">", threshold: "80", action: "block", version: 2, status: "staging", is_active: true },
-    { id: 3, rule_uuid: "rule-3", name: "Flag High Cost Requests", guard: "cost", field: "projected_cost", operator: ">", threshold: "2.50", action: "flag", version: 1, status: "production", is_active: true }
-  ]);
+const MOCK_RULES: Rule[] = [
+  { id: 1, rule_uuid: "rule-1", name: "Redact US Phone Numbers", guard: "responsibility", field: "PHONE_NUMBER", operator: "contains", threshold: "1", action: "redact", version: 1, status: "production", is_active: true },
+  { id: 2, rule_uuid: "rule-2", name: "Block Hallucination > 80%", guard: "performance", field: "hallucination_score", operator: ">", threshold: "80", action: "block", version: 2, status: "staging", is_active: true },
+  { id: 3, rule_uuid: "rule-3", name: "Flag High Cost Requests", guard: "cost", field: "projected_cost", operator: ">", threshold: "2.50", action: "flag", version: 1, status: "production", is_active: true }
+];
 
+export default function PolicyStudio() {
+  const router = useRouter();
+  const [isAdmin, setIsAdmin] = useState(true);
+  const [useMockData, setUseMockData] = useState(false);
+
+  useEffect(() => {
+    const checkState = () => {
+      const role = localStorage.getItem('mockRole');
+      setIsAdmin(role !== 'viewer');
+      const mock = localStorage.getItem('useMockData');
+      setUseMockData(mock === 'true');
+    };
+    checkState();
+    window.addEventListener('storage', checkState);
+    return () => window.removeEventListener('storage', checkState);
+  }, []);
+
+  const [rules, setRules] = useState<Rule[]>([]);
   const [name, setName] = useState('');
   const [guard, setGuard] = useState('responsibility');
   const [field, setField] = useState('EMAIL_ADDRESS');
   const [operator, setOperator] = useState('contains');
   const [threshold, setThreshold] = useState('1');
   const [action, setAction] = useState('redact');
-  const [tenantId, setTenantId] = useState('tenant-default');
+  const [tenantId, setTenantId] = useState('default');
 
   const [message, setMessage] = useState('');
 
   // Fetch actual rules from Policy Service if available
   useEffect(() => {
     async function fetchRules() {
+      if (useMockData) {
+        setRules(MOCK_RULES);
+        setMessage(''); // Clear error messages when mock mode is enabled
+        return;
+      }
+
       try {
         const res = await fetch('http://localhost:8001/rules', {
           headers: { 'tenant-id': tenantId }
         });
         if (res.ok) {
           const data = await res.json();
-          if (data && data.length > 0) {
-            setRules(data);
-          }
+          setRules(data || []);
+          setMessage('');
+        } else {
+          setRules([]);
+          setMessage("Failed to fetch rules from server.");
         }
       } catch (err) {
-        console.log("Policy Service not running or unreachable. Using offline state.", err);
+        setRules([]);
+        setMessage("API Unreachable. Enable Mock Data to preview UI.");
       }
     }
     fetchRules();
-  }, [tenantId]);
+  }, [tenantId, useMockData]);
 
   const handleCreateRule = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name) return;
 
     const newRulePayload = { name, guard, field, operator, threshold, action };
+
+    if (useMockData) {
+      const localRule: Rule = {
+        id: Math.floor(Math.random() * 1000) + 10,
+        rule_uuid: Math.random().toString(36).substr(2, 9),
+        name, guard, field, operator, threshold, action,
+        version: 1, status: 'staging', is_active: true
+      };
+      setRules(prev => [...prev, localRule]);
+      setMessage('Created rule locally in Staging (Mock Mode)');
+      setName('');
+      return;
+    }
 
     try {
       const res = await fetch('http://localhost:8001/rules', {
@@ -75,25 +114,21 @@ export default function PolicyStudio() {
         setRules(prev => [...prev, savedRule]);
         setMessage('Rule created successfully (Staging)');
       } else {
-        throw new Error("API error");
+        setMessage('API Error: Failed to create rule');
       }
     } catch (err) {
-      // Fallback local update
-      const localRule: Rule = {
-        id: Math.floor(Math.random() * 1000) + 10,
-        rule_uuid: Math.random().toString(36).substr(2, 9),
-        name, guard, field, operator, threshold, action,
-        version: 1, status: 'staging', is_active: true
-      };
-      setRules(prev => [...prev, localRule]);
-      setMessage('Created rule locally in Staging (Offline Mode)');
+      setMessage('API Unreachable.');
     }
-
-    // Reset Form
     setName('');
   };
 
   const handleDeployAll = async () => {
+    if (useMockData) {
+      setRules(prev => prev.map(r => ({ ...r, status: 'production' })));
+      setMessage('All rules promoted to Production locally (Mock Mode)');
+      return;
+    }
+
     try {
       const res = await fetch('http://localhost:8001/deploy', {
         method: 'POST',
@@ -105,19 +140,23 @@ export default function PolicyStudio() {
       });
       if (res.ok) {
         const data = await res.json();
-        setMessage(data.message);
-        // Refresh local rules state to production status
+        setMessage(data.message || 'Deployed to production');
         setRules(prev => prev.map(r => r.status === 'staging' ? { ...r, status: 'production' } : r));
       } else {
-        throw new Error("Deploy error");
+        setMessage('API Error: Failed to deploy');
       }
     } catch (err) {
-      setRules(prev => prev.map(r => ({ ...r, status: 'production' })));
-      setMessage('All rules promoted to Production locally (Offline Mode)');
+      setMessage('API Unreachable.');
     }
   };
 
   const handleDeleteRule = async (ruleUuid: string) => {
+    if (useMockData) {
+      setRules(prev => prev.filter(r => r.rule_uuid !== ruleUuid));
+      setMessage('Rule deleted locally (Mock Mode)');
+      return;
+    }
+
     try {
       const res = await fetch(`http://localhost:8001/rules/${ruleUuid}`, {
         method: 'DELETE',
@@ -127,29 +166,15 @@ export default function PolicyStudio() {
         setRules(prev => prev.filter(r => r.rule_uuid !== ruleUuid));
         setMessage('Rule deleted successfully');
       } else {
-        throw new Error("Delete error");
+        setMessage('API Error: Failed to delete rule');
       }
     } catch (err) {
-      setRules(prev => prev.filter(r => r.rule_uuid !== ruleUuid));
-      setMessage('Rule deleted locally (Offline Mode)');
+      setMessage('API Unreachable.');
     }
   };
 
   const handleImportPack = async (packKey: string) => {
-    try {
-      const res = await fetch(`http://localhost:8001/rules/templates/import/${packKey}`, {
-        method: 'POST',
-        headers: { 'tenant-id': tenantId }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setRules(prev => [...prev, ...data]);
-        setMessage(`Imported template pack: ${packKey}`);
-      } else {
-        throw new Error("Import error");
-      }
-    } catch (err) {
-      // Mock import rules local
+    if (useMockData) {
       const mockTemplates: Record<string, Rule[]> = {
         gdpr: [
           { id: 101, rule_uuid: "temp-gdpr-1", name: "GDPR: Mask Emails", guard: "responsibility", field: "EMAIL_ADDRESS", operator: "contains", threshold: "1", action: "redact", version: 1, status: "staging", is_active: true },
@@ -165,7 +190,24 @@ export default function PolicyStudio() {
       
       const newRules = mockTemplates[packKey] || [];
       setRules(prev => [...prev, ...newRules]);
-      setMessage(`Imported template pack: ${packKey} locally (Offline Mode)`);
+      setMessage(`Imported template pack: ${packKey} locally (Mock Mode)`);
+      return;
+    }
+
+    try {
+      const res = await fetch(`http://localhost:8001/rules/templates/import/${packKey}`, {
+        method: 'POST',
+        headers: { 'tenant-id': tenantId }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setRules(prev => [...prev, ...data]);
+        setMessage(`Imported template pack: ${packKey}`);
+      } else {
+        setMessage('API Error: Failed to import pack');
+      }
+    } catch (err) {
+      setMessage('API Unreachable.');
     }
   };
 
@@ -173,13 +215,20 @@ export default function PolicyStudio() {
     <div className="page-container">
       <header className="page-header">
         <div className="header-info">
-          <h1 className="page-title">Policy Studio</h1>
-          <p className="page-description">Author, manage, and promote real-time guardrails and compliance rules.</p>
+          <button className="back-btn" onClick={() => router.back()} title="Go Back">
+            <ArrowLeft size={20} />
+          </button>
+          <div>
+            <h1 className="page-title">Policy Studio</h1>
+            <p className="page-description">Author, manage, and promote real-time guardrails and compliance rules.</p>
+          </div>
         </div>
-        <button className="deploy-btn" onClick={handleDeployAll}>
-          <Play className="icon" />
-          <span>Promote Staging to Production</span>
-        </button>
+        {isAdmin && (
+          <button className="deploy-btn" onClick={handleDeployAll}>
+            <Play className="icon" />
+            <span>Promote Staging to Production</span>
+          </button>
+        )}
       </header>
 
       {message && (
@@ -191,8 +240,9 @@ export default function PolicyStudio() {
 
       <div className="studio-layout">
         {/* Visual Rule Builder Panel */}
-        <section className="builder-panel">
-          <h2 className="panel-title">Create New Rule</h2>
+        {isAdmin ? (
+          <section className="builder-panel">
+            <h2 className="panel-title">Create New Rule</h2>
           <form onSubmit={handleCreateRule} className="rule-form">
             <div className="form-group">
               <label>Rule Name</label>
@@ -313,6 +363,7 @@ export default function PolicyStudio() {
             </div>
           </div>
         </section>
+        ) : null}
 
         {/* Existing Rules List */}
         <section className="list-panel">
@@ -372,6 +423,31 @@ export default function PolicyStudio() {
           display: flex;
           justify-content: space-between;
           align-items: center;
+        }
+
+        .header-info {
+          display: flex;
+          align-items: center;
+          gap: 16px;
+        }
+
+        .back-btn {
+          background: transparent;
+          border: 1px solid var(--border-subtle);
+          color: var(--text-secondary);
+          border-radius: var(--radius-md);
+          padding: 8px;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all var(--transition-fast);
+        }
+
+        .back-btn:hover {
+          color: var(--text-primary);
+          border-color: var(--border-strong);
+          background-color: var(--bg-surface-2);
         }
 
         .page-title {

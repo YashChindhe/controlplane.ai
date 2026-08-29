@@ -29,35 +29,47 @@ export function createInterceptorStream(
   let lastCostDensity = 1.0;
   let matchedEntities: string[] = [];
 
-  // Simple local regex-based redact fallback for zero-latency inline redaction
-  const LOCAL_PII_PATTERNS = [
-    { name: 'EMAIL', regex: /[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+/g },
-    { name: 'PHONE_NUMBER', regex: /\b(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b/g },
-    { name: 'SSN', regex: /\b\d{3}-\d{2}-\d{4}\b/g }
-  ];
-
+  /**
+   * Performs inline PII detection and redaction.
+   * CRITICAL: Do NOT use module-level regex objects with the /g flag.
+   * The /g flag causes regex objects to maintain lastIndex across calls —
+   * after .test() advances lastIndex, the next .replace() starts mid-string,
+   * causing silent missed replacements. Use fresh instances every call.
+   */
   function localRedact(text: string): { redactedText: string; detected: string[] } {
     let redacted = text;
     const detected: string[] = [];
-    for (const pattern of LOCAL_PII_PATTERNS) {
-      if (pattern.regex.test(redacted)) {
-        detected.push(pattern.name);
-        redacted = redacted.replace(pattern.regex, `[REDACTED_${pattern.name}]`);
+
+    // Pattern sources — instantiated fresh on every call to avoid lastIndex contamination
+    const patternDefs: { name: string; source: string }[] = [
+      { name: 'EMAIL', source: '[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+' },
+      { name: 'PHONE_NUMBER', source: '(?:\\+?\\d{1,3}[.\\-\\s]?)?\\(?\\d{3}\\)?[.\\-\\s]?\\d{3}[.\\-\\s]?\\d{4}' },
+      { name: 'SSN', source: '\\d{3}-\\d{2}-\\d{4}' },
+    ];
+
+    for (const def of patternDefs) {
+      // Separate non-global regex for test (no lastIndex side effects)
+      const testRegex = new RegExp(def.source);
+      if (testRegex.test(redacted)) {
+        detected.push(def.name);
+        // Fresh global regex for the actual replacement pass
+        const replaceRegex = new RegExp(def.source, 'g');
+        redacted = redacted.replace(replaceRegex, `[REDACTED_${def.name}]`);
       }
     }
     return { redactedText: redacted, detected };
   }
 
   const transform = new Transform({
-    transform(chunk: any, encoding: string, callback: TransformCallback) {
+    transform(chunk: any, _encoding: string, callback: TransformCallback) {
       if (isBlocked) {
-        return callback(); // Do not process any more chunks
+        return callback();
       }
 
       const dataStr = chunk.toString();
       lineBuffer += dataStr;
       const lines = lineBuffer.split('\n');
-      lineBuffer = lines.pop() || ''; // Keep the incomplete line in buffer
+      lineBuffer = lines.pop() || '';
 
       for (const line of lines) {
         const trimmed = line.trim();
@@ -78,7 +90,6 @@ export function createInterceptorStream(
             const deltaContent = parsed.choices?.[0]?.delta?.content || '';
 
             if (deltaContent) {
-              // Local/Responsibility Redact on the fly
               const { redactedText, detected } = localRedact(deltaContent);
               if (detected.length > 0) {
                 hasPiiDetected = true;
@@ -88,24 +99,23 @@ export function createInterceptorStream(
                 parsed.choices[0].delta.content = redactedText;
               }
 
-              // Update buffers
               fullTextBuffer += redactedText;
               windowTextBuffer += redactedText;
 
-              // Approximate word-based token count
               const words = windowTextBuffer.split(/\s+/).filter(Boolean);
               if (words.length >= 50) {
                 const currentWindowText = windowTextBuffer;
-                windowTextBuffer = ''; // Reset window buffer
-
-                // Async, non-blocking evaluation call
-                evaluateWindowAsync(currentWindowText);
+                windowTextBuffer = '';
+                // Fire async, non-blocking — stream continues while evaluation runs
+                evaluateWindowAsync(currentWindowText).catch(err =>
+                  console.error('Tri-Guard evaluation error (non-blocking):', err)
+                );
               }
             }
 
             this.push(`data: ${JSON.stringify(parsed)}\n`);
-          } catch (err) {
-            // If it is not valid JSON or parsing failed, just pass through
+          } catch (_err) {
+            // Invalid JSON chunk — pass through unchanged
             this.push(line + '\n');
           }
         } else {
@@ -117,24 +127,31 @@ export function createInterceptorStream(
     },
 
     flush(callback: TransformCallback) {
-      // Process remaining line buffer
+      // Flush any remaining buffered line
       if (lineBuffer) {
         this.push(lineBuffer);
       }
 
-      // Run final evaluation if we have remaining text in window
+      // Evaluate any remaining window content, then fire the audit event
       if (windowTextBuffer.trim()) {
-        evaluateWindowAsync(windowTextBuffer);
+        evaluateWindowAsync(windowTextBuffer)
+          .then(() => {
+            sendFinalAuditEvent();
+            callback();
+          })
+          .catch(err => {
+            console.error('Final window evaluation failed (fail-open):', err);
+            sendFinalAuditEvent();
+            callback();
+          });
+      } else {
+        sendFinalAuditEvent();
+        callback();
       }
-
-      // Send final audit event
-      sendFinalAuditEvent();
-
-      callback();
     }
   });
 
-  async function evaluateWindowAsync(text: string) {
+  async function evaluateWindowAsync(text: string): Promise<void> {
     try {
       const response = await undiciRequest(`${TRI_GUARD_URL}/evaluate`, {
         method: 'POST',
@@ -144,11 +161,11 @@ export function createInterceptorStream(
 
       if (response.statusCode === 200) {
         const result = (await response.body.json()) as any;
-        
-        // Update states
+
         lastPerformanceScore = result.performance.score;
         lastCostDensity = result.cost.density;
         totalTokenCount += result.cost.tokens;
+
         if (result.responsibility.has_pii) {
           hasPiiDetected = true;
           result.responsibility.matched_entities.forEach((entity: string) => {
@@ -158,14 +175,13 @@ export function createInterceptorStream(
           });
         }
 
-        // Action Matrix Resolver
         const action = resolveActionMatrix(result);
         if (action === 'block' && !isBlocked) {
           isBlocked = true;
-          // Push a custom error stream termination message to client
           const errorMsg = {
             error: {
               type: 'governance_violation',
+              code: 'BLOCK_HIGH_RISK',
               message: 'Stream terminated due to safety, performance or cost policy violations.'
             }
           };
@@ -174,14 +190,14 @@ export function createInterceptorStream(
         }
       }
     } catch (error) {
-      console.error('Failed to evaluate stream window:', error);
+      // Fail-open per rules.md: if Tri-Guard is unavailable, pass chunk through and emit audit event
+      console.error('Tri-Guard service unavailable (fail-open):', error);
     }
   }
 
   function resolveActionMatrix(result: any): 'pass' | 'flag' | 'block' | 'redact' {
-    // Basic policy rules
     if (result.responsibility.has_pii) {
-      return 'redact'; // Already locally redacted chunk-by-chunk
+      return 'redact'; // Already redacted inline above
     }
     if (result.performance.score < 50) {
       return 'block'; // Severe hallucination / quality drop
@@ -192,9 +208,15 @@ export function createInterceptorStream(
     return 'pass';
   }
 
-  function sendFinalAuditEvent() {
-    const finalAction = isBlocked ? 'block' : (hasPiiDetected ? 'redact' : (lastPerformanceScore < 70 ? 'flag' : 'pass'));
-    
+  function sendFinalAuditEvent(): void {
+    const finalAction: string = isBlocked
+      ? 'block'
+      : hasPiiDetected
+      ? 'redact'
+      : lastPerformanceScore < 70
+      ? 'flag'
+      : 'pass';
+
     const event = {
       eventId: crypto.randomUUID(),
       tenantId,
@@ -226,16 +248,14 @@ export function createInterceptorStream(
 
     publishAuditEvent(event);
 
-    // Trigger outbound alerts based on action
     if (finalAction === 'block') {
-      sendSlackAlert(event).catch(err => console.error('Failed to trigger Slack alert:', err));
-      sendPagerDutyAlert(event).catch(err => console.error('Failed to trigger PagerDuty alert:', err));
+      sendSlackAlert(event).catch(err => console.error('Slack alert failed:', err));
+      sendPagerDutyAlert(event).catch(err => console.error('PagerDuty alert failed:', err));
     } else if (finalAction === 'flag') {
-      sendSlackAlert(event).catch(err => console.error('Failed to trigger Slack alert:', err));
+      sendSlackAlert(event).catch(err => console.error('Slack alert failed:', err));
     }
   }
 
-  // Handle pipe to proxy downstream
   upstreamStream.pipe(transform);
 
   return transform;

@@ -6,7 +6,14 @@ export async function dashboardWebsocketRoutes(fastify: FastifyInstance) {
     fastify.log.info('Dashboard client connected to WebSocket live feed');
 
     const unsubscribe = subscribeToLocalEvents((event) => {
-      connection.socket.send(JSON.stringify(event));
+      // Guard: only send if socket is still open
+      if (connection.socket.readyState === connection.socket.OPEN) {
+        try {
+          connection.socket.send(JSON.stringify(event));
+        } catch (err) {
+          fastify.log.error(err, 'Failed to send WebSocket event to dashboard client');
+        }
+      }
     });
 
     connection.socket.on('close', () => {
@@ -15,7 +22,7 @@ export async function dashboardWebsocketRoutes(fastify: FastifyInstance) {
     });
 
     connection.socket.on('error', (err: Error) => {
-      fastify.log.error(err, 'WebSocket error');
+      fastify.log.error(err, 'WebSocket error on dashboard live feed');
       unsubscribe();
     });
   });
