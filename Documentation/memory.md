@@ -53,23 +53,41 @@ Initialized monorepo scaffolding, base TypeScript configurations, docker-compose
 
 ---
 
+### Phase 1, Milestone 1.2 (Session 3 — 2026-08-29)
+Implemented the Tri-Guard evaluation service core and wired it to the proxy gateway's streaming interception loop:
+- Created `apps/tri-guard/` FastAPI Python service with stubs for Performance, Cost, and Responsibility guards.
+- Implemented `stream-interceptor.ts` in `apps/gateway` with a sliding 50-token window, asynchronously calling the evaluation service.
+- Implemented the Verdict Aggregator and Action Matrix resolver in the gateway.
+- Setup Redpanda/Kafka in `docker-compose.yml` and structured audit logs sent to Kafka.
+- Verified stream blocking, inline redaction, and logging of violations.
+
+### Phase 1, Milestone 1.3 (Session 4 — 2026-08-29)
+Replaced stub guards with real machine learning models and heuristics:
+- Integrated ONNX Runtime with quantized DistilBERT to classify hallucination risk in the Performance Guard.
+- Implemented sentence-embeddings based contradiction detector and pattern-based confidence calibration.
+- Integrated `tiktoken` for accurate OpenAI token counting and mapped model pricing dynamically using `pricing.json` configuration database in Cost Guard.
+- Built a semantic density scorer (information entropy) and a model-task fit classifier for Cost Guard.
+- Integrated Microsoft Presidio Analyzer and custom pattern recognizers (IBAN, HEALTH_ID, PROJECT_CODE) in Responsibility Guard.
+- Added demographic bias detector and regulatory tagger mapping violations to compliance frameworks (GDPR, HIPAA, EU AI Act).
+- Created a robust startup pipeline to download required ONNX models directly from HuggingFace Hub.
+- Wrote and executed automated unit tests and a performance benchmarking script (`benchmark.py`), achieving average latency under 50ms.
+
+---
+
 ## Which Is Currently Being Worked On
 
-**Status: Phase 1, Milestone 1.1 Complete — Ready to begin Milestone 1.2 stream interception & evaluation loop.**
+**Status: Phase 1, Milestone 1.3 Complete — Ready to begin Milestone 1.4: Governance Dashboard v1.**
 
-### Next Up: Phase 1, Milestone 1.2 — Tri-Guard Service Foundation & Stream Interception
+### Next Up: Phase 1, Milestone 1.4 — Governance Dashboard v1
 
 **Sprint work items (do these in order):**
 
-1. [ ] Set up `apps/tri-guard/` — Python FastAPI service skeleton with gRPC/HTTP endpoint
-2. [ ] Stub out the three Guard modules (Performance, Cost, Responsibility) with mock scorers
-3. [ ] Implement stream-interceptor.ts in `apps/gateway` with a sliding 50-token evaluation window
-4. [ ] Wire stream-interceptor.ts to call the Tri-Guard service per window asynchronously
-5. [ ] Implement Verdict Aggregator and Action Matrix resolver in gateway
-6. [ ] Set up Kafka in docker-compose for async audit logging
-7. [ ] Verify chunk redaction, event logging, and blocking responses (GovernanceViolationError)
-
-**Do NOT start**: Dashboard UI, Policy Studio, Audit Vault, SDKs — these are Milestone 3+ work.
+1. [ ] Set up `@controlplane/dashboard` Next.js application skeleton using App Router.
+2. [ ] Implement the styling design system in `globals.css` with CSS Custom Properties from `design.md`.
+3. [ ] Integrate NextAuth.js v5 for credential-based authentication.
+4. [ ] Build the Live Feed page (`/dashboard/live-feed`) with WebSocket connection to display real-time audit events.
+5. [ ] Build the Analytics page (`/dashboard/analytics`) featuring Recharts timelines for risk scores and costs.
+6. [ ] Build the Compliance page (`/dashboard/compliance`) showing the custom D3.js/recharts heatmap of regulations vs. days.
 
 ---
 

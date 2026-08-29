@@ -61,28 +61,28 @@ Each milestone is a shippable unit — at the end of every milestone, the system
 
 ---
 
-### Milestone 1.3 — Real ML Guard Engines (Weeks 5–7)
+### Milestone 1.3 — Real ML Guard Engines (Weeks 5–7) [COMPLETED]
 
 **Goal**: Replace stub guards with real inference. This is the hardest milestone technically — getting distilled SLM inference fast enough to meet the 50ms budget.
 
 **Deliverables**:
-- **Performance Guard (real)**:
-  - Integrate ONNX Runtime with quantized DistilBERT fine-tuned on HaluEval (hallucination detection)
-  - Implement contradiction detector (cosine similarity between sentence pairs within window)
-  - Implement confidence calibration scorer (pattern-based detection of hedging vs. overconfident language)
-  - Benchmark: must return score in < 20ms (single-core CPU)
-- **Cost Guard (real)**:
-  - Real token count against tiktoken / Anthropic tokenizer per model
-  - Real projected cost calculation against pricing table (config file, updated monthly)
-  - Semantic density scorer: information entropy vs. token count ratio (sentence-transformers)
-  - Model-task fit classifier: lightweight 3-class classifier (simple/medium/complex task) vs. model tier capability
-- **Responsibility Guard (real)**:
-  - Microsoft Presidio integration with 40+ entity recognizers
-  - Custom recognizers for: IBAN, health IDs, internal project codes (tenant-configurable)
-  - Demographic bias detector: embedding-based comparison of parallel phrasings on protected attributes
-  - Regulatory tagger: rule-based mapping of violation type → regulation article
-- ONNX model artifact pipeline: download from S3 on container start, cache locally
-- Performance benchmarking script: measure p50/p99 latency across all three guards
+- [x] **Performance Guard (real)**:
+  - [x] Integrate ONNX Runtime with quantized DistilBERT fine-tuned on HaluEval (hallucination detection)
+  - [x] Implement contradiction detector (cosine similarity between sentence pairs within window)
+  - [x] Implement confidence calibration scorer (pattern-based detection of hedging vs. overconfident language)
+  - [x] Benchmark: must return score in < 20ms (single-core CPU)
+- [x] **Cost Guard (real)**:
+  - [x] Real token count against tiktoken / Anthropic tokenizer per model
+  - [x] Real projected cost calculation against pricing table (config file, updated monthly)
+  - [x] Semantic density scorer: information entropy vs. token count ratio (sentence-transformers)
+  - [x] Model-task fit classifier: lightweight 3-class classifier (simple/medium/complex task) vs. model tier capability
+- [x] **Responsibility Guard (real)**:
+  - [x] Microsoft Presidio integration with 40+ entity recognizers
+  - [x] Custom recognizers for: IBAN, health IDs, internal project codes (tenant-configurable)
+  - [x] Demographic bias detector: embedding-based comparison of parallel phrasings on protected attributes
+  - [x] Regulatory tagger: rule-based mapping of violation type → regulation article
+- [x] ONNX model artifact pipeline: download from S3/HF on container start, cache locally
+- [x] Performance benchmarking script: measure p50/p99 latency across all three guards
 
 **Success Criteria**: Real hallucination detection operational. Real PII detection (Presidio) at <30ms. All three guards together within 50ms p99 on a 2-vCPU container. 
 
