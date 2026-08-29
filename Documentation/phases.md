@@ -145,18 +145,18 @@ Each milestone is a shippable unit — at the end of every milestone, the system
 
 ---
 
-### Milestone 1.6 — SDK, Integrations & Hardening (Week 12)
+### Milestone 1.6 — SDK, Integrations & Hardening (Week 12) [COMPLETED]
 
 **Goal**: Package the integration surface for developer adoption. Harden the system for production use.
 
 **Deliverables**:
-- `packages/sdk-python/`: Python SDK — `controlplane.AsyncClient`, drop-in for `openai.AsyncOpenAI`. Handles streaming transparently.
-- `packages/sdk-node/`: Node.js SDK — `ControlPlane` class, drop-in for `openai.OpenAI`.
-- Webhook integrations: Slack (block escalation → Slack message), PagerDuty (critical incident → PD alert)
-- Kubernetes manifests for all services (production-ready, resource limits, HPA configured)
-- End-to-end integration tests: simulate streaming LLM output → detect PII → redact → verify in audit log
-- Load test: 100 concurrent streaming requests, verify p99 < 50ms evaluation latency holds
-- Security review: check tenant isolation, API key handling, PII in logs
+- [x] `packages/sdk-python/`: Python SDK — `controlplane.AsyncClient`, drop-in for `openai.AsyncOpenAI`. Handles streaming transparently.
+- [x] `packages/sdk-node/`: Node.js SDK — `ControlPlane` class, drop-in for `openai.OpenAI`.
+- [x] Webhook integrations: Slack (block escalation → Slack message), PagerDuty (critical incident → PD alert)
+- [x] Kubernetes manifests for all services (production-ready, resource limits, HPA configured)
+- [x] End-to-end integration tests: simulate streaming LLM output → detect PII → redact → verify in audit log
+- [x] Load test: 100 concurrent streaming requests, verify p99 < 50ms evaluation latency holds
+- [x] Security review: check tenant isolation, API key handling, PII in logs
 
 **Phase 1 complete**: System is production-deployable. First enterprise pilot customers can be onboarded.
 

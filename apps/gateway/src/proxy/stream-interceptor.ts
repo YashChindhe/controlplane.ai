@@ -1,6 +1,7 @@
 import { Readable, Transform, TransformCallback } from 'stream';
 import { request as undiciRequest } from 'undici';
 import { publishAuditEvent } from '../services/kafka.js';
+import { sendSlackAlert, sendPagerDutyAlert } from '../services/alert.js';
 import crypto from 'crypto';
 
 const TRI_GUARD_URL = process.env.TRI_GUARD_URL || 'http://localhost:8000';
@@ -224,6 +225,14 @@ export function createInterceptorStream(
     };
 
     publishAuditEvent(event);
+
+    // Trigger outbound alerts based on action
+    if (finalAction === 'block') {
+      sendSlackAlert(event).catch(err => console.error('Failed to trigger Slack alert:', err));
+      sendPagerDutyAlert(event).catch(err => console.error('Failed to trigger PagerDuty alert:', err));
+    } else if (finalAction === 'flag') {
+      sendSlackAlert(event).catch(err => console.error('Failed to trigger Slack alert:', err));
+    }
   }
 
   // Handle pipe to proxy downstream
