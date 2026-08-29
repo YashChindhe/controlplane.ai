@@ -4,3 +4,7 @@ dist/
 .env.local
 model_artifacts/
 *.log
+apps/tri-guard/models/
+__pycache__/
+.pytest_cache/
+
