@@ -19,7 +19,7 @@ class DeployResponse(BaseModel):
 @router.post("", response_model=DeployResponse)
 async def deploy_rules(
     request: DeployRequest,
-    tenant_id: str = Header(...),
+    tenant_id: str = Header(..., alias="tenant-id"),
     db: AsyncSession = Depends(get_db)
 ):
     query = select(Rule).where(

@@ -1,8 +1,13 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Download, Calendar, Activity, AlertOctagon, MoreVertical, X } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Search, Filter, Download, Calendar, Activity, AlertOctagon, MoreVertical, X, ArrowLeft } from 'lucide-react';
 
+// The Audit Vault UI supports two event schemas:
+// 1. Direct audit-service schema: { guard, action, severity, metrics, rulesTriggered, contentHash }
+// 2. Gateway streaming schema:    { model, evaluation: { action, performance, cost, responsibility } }
+// normalizeEvent() bridges both schemas into a unified display format.
 interface AuditEvent {
   eventId: string;
   timestamp: string;
@@ -10,11 +15,15 @@ interface AuditEvent {
   guard: string;
   action: string;
   severity: string;
+  model?: string;
   metrics: {
     latencyMs: number;
     inputTokens?: number;
     outputTokens?: number;
     cost?: number;
+    performanceScore?: number;
+    hasPii?: boolean;
+    matchedEntities?: string[];
   };
   rulesTriggered: Array<{
     ruleId?: string;
@@ -24,41 +33,120 @@ interface AuditEvent {
   contentHash: string;
 }
 
-export default function AuditVault() {
-  const [events, setEvents] = useState<AuditEvent[]>([
-    // Seed mock data
-    {
-      eventId: "evt_9a2f1b8e",
-      timestamp: new Date().toISOString(),
-      tenantId: "tenant-default",
-      guard: "responsibility",
-      action: "redact",
-      severity: "medium",
-      metrics: { latencyMs: 22, inputTokens: 48, outputTokens: 96, cost: 0.0003 },
-      rulesTriggered: [{ ruleName: "GDPR Email Masking" }],
-      contentHash: "sha256_b3781ad2b9921e25e..."
-    },
-    {
-      eventId: "evt_1a9f0e6b",
-      timestamp: new Date(Date.now() - 3600000).toISOString(),
-      tenantId: "tenant-default",
-      guard: "performance",
-      action: "block",
-      severity: "critical",
-      metrics: { latencyMs: 38, inputTokens: 112, outputTokens: 14, cost: 0.0001 },
-      rulesTriggered: [{ ruleName: "Block Hallucination > 80%" }],
-      contentHash: "sha256_fa8192cb911029c..."
-    }
-  ]);
+// Normalize any event — whether from the gateway streaming schema or the old audit-service schema
+function normalizeEvent(raw: any): AuditEvent {
+  // If event has the gateway streaming schema (evaluation field)
+  if (raw.evaluation) {
+    const evaluation = raw.evaluation || {};
+    const perfScore = evaluation.performance?.score ?? 100;
+    const action = evaluation.action || 'pass';
+    const hasPii = evaluation.responsibility?.hasPii || false;
+    const tokens = evaluation.cost?.tokens || 0;
 
+    let severity = 'safe';
+    if (action === 'block') severity = 'critical';
+    else if (action === 'flag') severity = 'medium';
+    else if (action === 'redact') severity = 'low';
+
+    let guard = 'performance';
+    if (hasPii) guard = 'responsibility';
+    else if (perfScore < 70) guard = 'performance';
+
+    const matchedEntities = evaluation.responsibility?.matchedEntities || [];
+
+    return {
+      eventId: raw.eventId,
+      timestamp: raw.timestamp,
+      tenantId: raw.tenantId,
+      guard,
+      action,
+      severity,
+      model: raw.model,
+      metrics: {
+        latencyMs: 0, // Not tracked in streaming schema
+        outputTokens: tokens,
+        cost: undefined,
+        performanceScore: perfScore,
+        hasPii,
+        matchedEntities,
+      },
+      rulesTriggered: matchedEntities.map((e: string) => ({ ruleName: `${e} Detected` })),
+      contentHash: raw.response?.text ? `sha256:${raw.eventId.slice(0, 16)}...` : 'N/A',
+    };
+  }
+
+  // Old audit-service schema — return as-is with safe defaults
+  return {
+    eventId: raw.eventId || 'unknown',
+    timestamp: raw.timestamp || new Date().toISOString(),
+    tenantId: raw.tenantId || '',
+    guard: raw.guard || 'unknown',
+    action: raw.action || 'pass',
+    severity: raw.severity || 'safe',
+    model: raw.model,
+    metrics: raw.metrics || { latencyMs: 0 },
+    rulesTriggered: raw.rulesTriggered || [],
+    contentHash: raw.contentHash || 'N/A',
+  };
+}
+
+const MOCK_EVENTS: AuditEvent[] = [
+  {
+    eventId: "evt_9a2f1b8e",
+    timestamp: new Date().toISOString(),
+    tenantId: "tenant-default",
+    guard: "responsibility",
+    action: "redact",
+    severity: "medium",
+    metrics: { latencyMs: 22, inputTokens: 48, outputTokens: 96, cost: 0.0003 },
+    rulesTriggered: [{ ruleName: "GDPR Email Masking" }],
+    contentHash: "sha256_b3781ad2b9921e25e..."
+  },
+  {
+    eventId: "evt_1a9f0e6b",
+    timestamp: new Date(Date.now() - 3600000).toISOString(),
+    tenantId: "tenant-default",
+    guard: "performance",
+    action: "block",
+    severity: "critical",
+    metrics: { latencyMs: 38, inputTokens: 112, outputTokens: 14, cost: 0.0001 },
+    rulesTriggered: [{ ruleName: "Block Hallucination > 80%" }],
+    contentHash: "sha256_fa8192cb911029c..."
+  }
+];
+
+export default function AuditVault() {
+  const router = useRouter();
+  const [isAdmin, setIsAdmin] = useState(true);
+  const [useMockData, setUseMockData] = useState(false);
+
+  useEffect(() => {
+    const checkState = () => {
+      const role = localStorage.getItem('mockRole');
+      setIsAdmin(role !== 'viewer');
+      const mock = localStorage.getItem('useMockData');
+      setUseMockData(mock === 'true');
+    };
+    checkState();
+    window.addEventListener('storage', checkState);
+    return () => window.removeEventListener('storage', checkState);
+  }, []);
+
+  const [events, setEvents] = useState<AuditEvent[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<AuditEvent | null>(null);
-  const [tenantId] = useState('tenant-default');
+  const [tenantId] = useState('default');
   const [searchQuery, setSearchQuery] = useState('');
   const [guardFilter, setGuardFilter] = useState('');
   const [actionFilter, setActionFilter] = useState('');
   const [severityFilter, setSeverityFilter] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
 
   const fetchEvents = async () => {
+    if (useMockData) {
+      setEvents(MOCK_EVENTS);
+      return;
+    }
+
     try {
       const queryParams = new URLSearchParams();
       if (searchQuery) queryParams.append('q', searchQuery);
@@ -72,17 +160,23 @@ export default function AuditVault() {
       if (res.ok) {
         const data = await res.json();
         if (data.events) {
-          setEvents(data.events);
+          // Normalize events from any schema (gateway streaming or audit-service native)
+          setEvents((data.events as any[]).map(normalizeEvent));
+          setErrorMsg('');
         }
+      } else {
+        setEvents([]);
+        setErrorMsg('Failed to fetch from Audit Service (check that it is running on port 8002).');
       }
     } catch (err) {
-      console.log("Audit Service not running or unreachable. Using offline state.", err);
+      setEvents([]);
+      setErrorMsg("Audit Service unreachable (localhost:8002). Enable Mock Data to preview UI.");
     }
   };
 
   useEffect(() => {
     fetchEvents();
-  }, [searchQuery, guardFilter, actionFilter, severityFilter]);
+  }, [searchQuery, guardFilter, actionFilter, severityFilter, useMockData]);
 
   const handleExport = () => {
     const queryParams = new URLSearchParams();
@@ -99,14 +193,28 @@ export default function AuditVault() {
     <div className="page-container">
       <header className="page-header">
         <div className="header-info">
-          <h1 className="page-title">Audit Vault</h1>
-          <p className="page-description">Query immutable WORM archives of AI event governance actions.</p>
+          <button className="back-btn" onClick={() => router.back()} title="Go Back">
+            <ArrowLeft size={20} />
+          </button>
+          <div>
+            <h1 className="page-title">Audit Vault</h1>
+            <p className="page-description">Query immutable WORM archives of AI event governance actions.</p>
+          </div>
         </div>
-        <button className="export-btn" onClick={handleExport}>
-          <Download className="icon" />
-          <span>Export Logs (CSV)</span>
-        </button>
+        {isAdmin && (
+          <button className="export-btn" onClick={handleExport}>
+            <Download className="icon" />
+            <span>Export Logs (CSV)</span>
+          </button>
+        )}
       </header>
+
+      {errorMsg && (
+        <div className="alert-box error" style={{ marginBottom: '16px', backgroundColor: 'rgba(239, 68, 68, 0.1)', color: 'var(--color-brand-red)', padding: '12px', borderRadius: '8px', border: '1px solid var(--color-brand-red)' }}>
+          <AlertOctagon size={16} />
+          <span style={{ marginLeft: '8px' }}>{errorMsg}</span>
+        </div>
+      )}
 
       {/* Filter Toolbar */}
       <section className="filter-toolbar">
@@ -162,22 +270,30 @@ export default function AuditVault() {
             </tr>
           </thead>
           <tbody>
-            {events.map((e) => (
-              <tr key={e.eventId} className="event-row">
-                <td>{new Date(e.timestamp).toLocaleTimeString()}</td>
-                <td className="code">{e.eventId}</td>
-                <td><span className="capitalize">{e.guard}</span></td>
-                <td><span className={`action-tag ${e.action}`}>{e.action}</span></td>
-                <td><span className={`severity-tag ${e.severity}`}>{e.severity}</span></td>
-                <td>{e.metrics.latencyMs}ms</td>
-                <td>${e.metrics.cost?.toFixed(5) || "0.00"}</td>
-                <td>
-                  <button className="details-btn" onClick={() => setSelectedEvent(e)}>
-                    View Detail
-                  </button>
+            {events.length === 0 ? (
+              <tr>
+                <td colSpan={8} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
+                  {errorMsg || 'No audit events found. Make a proxied LLM request through the gateway to generate events.'}
                 </td>
               </tr>
-            ))}
+            ) : (
+              events.map((e) => (
+                <tr key={e.eventId} className="event-row">
+                  <td>{new Date(e.timestamp).toLocaleTimeString()}</td>
+                  <td className="code" title={e.eventId}>{e.eventId.slice(0, 20)}...</td>
+                  <td><span className="capitalize">{e.guard}</span></td>
+                  <td><span className={`action-tag ${e.action}`}>{e.action}</span></td>
+                  <td><span className={`severity-tag ${e.severity}`}>{e.severity}</span></td>
+                  <td>{e.metrics.latencyMs > 0 ? `${e.metrics.latencyMs}ms` : (e.metrics.outputTokens ? `${e.metrics.outputTokens} tok` : 'N/A')}</td>
+                  <td>{e.metrics.cost != null ? `$${e.metrics.cost.toFixed(5)}` : (e.metrics.performanceScore != null ? `Score: ${e.metrics.performanceScore.toFixed(1)}` : 'N/A')}</td>
+                  <td>
+                    <button className="details-btn" onClick={() => setSelectedEvent(e)}>
+                      View Detail
+                    </button>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </section>
@@ -261,6 +377,31 @@ export default function AuditVault() {
           display: flex;
           justify-content: space-between;
           align-items: center;
+        }
+
+        .header-info {
+          display: flex;
+          align-items: center;
+          gap: 16px;
+        }
+
+        .back-btn {
+          background: transparent;
+          border: 1px solid var(--border-subtle);
+          color: var(--text-secondary);
+          border-radius: var(--radius-md);
+          padding: 8px;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all var(--transition-fast);
+        }
+
+        .back-btn:hover {
+          color: var(--text-primary);
+          border-color: var(--border-strong);
+          background-color: var(--bg-surface-2);
         }
 
         .page-title {

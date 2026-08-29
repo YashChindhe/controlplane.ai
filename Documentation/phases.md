@@ -93,24 +93,24 @@ Each milestone is a shippable unit — at the end of every milestone, the system
 **Goal**: Build the core real-time observability UI. Engineers and executives can see what's happening across all AI outputs in real time.
 
 **Deliverables**:
-- `apps/dashboard/` — Next.js 14 App Router, TypeScript, Vanilla CSS design system
-  - Design system: all CSS custom properties from `design.md` implemented in `globals.css`
-  - Inter + JetBrains Mono loaded via Google Fonts
-  - Auth: NextAuth.js v5, simple email/password first (SSO in Phase 2)
-  - Layout: sidebar nav + main content area (dashboard shell)
-- **Live Feed page** (`/dashboard/live-feed`):
-  - WebSocket connection to backend: receive audit events in real time
-  - Incident card component: shows severity badge, guard type, action taken, timestamp, truncated output
-  - Auto-refresh last 100 events, infinite scroll for history
-  - Filter bar: by guard, by action, by severity, by time range
-- **Analytics page** (`/dashboard/analytics`):
-  - Risk score timelines: Recharts line chart (Performance, Cost, Responsibility scores over time)
-  - Time range picker: 1h, 24h, 7d, 30d
-  - Cost metrics: daily spend by model, application
-- **Compliance page** (`/dashboard/compliance`):
-  - Heatmap: regulation × day, cell color = risk incident count (D3.js)
-  - Violation breakdown by regulation
-- Backend: WebSocket gateway in `apps/gateway/` that pushes Kafka events to connected dashboard clients
+- [x] `apps/dashboard/` — Next.js 14 App Router, TypeScript, Vanilla CSS design system
+  - [x] Design system: all CSS custom properties from `design.md` implemented in `globals.css`
+  - [x] Inter + JetBrains Mono loaded via Google Fonts
+  - [x] Auth: NextAuth.js v5, simple email/password first (SSO in Phase 2)
+  - [x] Layout: sidebar nav + main content area (dashboard shell)
+- [x] **Live Feed page** (`/dashboard/live-feed`):
+  - [x] WebSocket connection to backend: receive audit events in real time
+  - [x] Incident card component: shows severity badge, guard type, action taken, timestamp, truncated output
+  - [x] Auto-refresh last 100 events, infinite scroll for history
+  - [x] Filter bar: by guard, by action, by severity, by time range
+- [x] **Analytics page** (`/dashboard/analytics`):
+  - [x] Risk score timelines: Recharts line chart (Performance, Cost, Responsibility scores over time)
+  - [x] Time range picker: 1h, 24h, 7d, 30d
+  - [x] Cost metrics: daily spend by model, application
+- [x] **Compliance page** (`/dashboard/compliance`):
+  - [x] Heatmap: regulation × day, cell color = risk incident count (D3.js)
+  - [x] Violation breakdown by regulation
+- [x] Backend: WebSocket gateway in `apps/gateway/` that pushes Kafka events to connected dashboard clients
 
 **Success Criteria**: Dashboard shows real-time events within 500ms of interception. Risk timelines render correctly. Compliance heatmap loads in under 2 seconds.
 

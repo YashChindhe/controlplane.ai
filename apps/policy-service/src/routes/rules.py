@@ -30,6 +30,9 @@ class RuleResponse(RuleBase):
     status: str
     is_active: bool
 
+    class Config:
+        from_attributes = True
+
 class TemplatePack(BaseModel):
     pack_name: str
     rules: List[RuleCreate]
@@ -65,7 +68,7 @@ TEMPLATE_PACKS = {
 @router.post("", response_model=RuleResponse, status_code=status.HTTP_201_CREATED)
 async def create_rule(
     rule_in: RuleCreate,
-    tenant_id: str = Header(...),
+    tenant_id: str = Header(..., alias="tenant-id"),
     db: AsyncSession = Depends(get_db)
 ):
     rule = Rule(
@@ -87,30 +90,66 @@ async def create_rule(
 
 @router.get("", response_model=List[RuleResponse])
 async def list_rules(
-    tenant_id: str = Header(...),
-    status: Optional[str] = None,
+    tenant_id: str = Header(..., alias="tenant-id"),
+    status_filter: Optional[str] = None,
     db: AsyncSession = Depends(get_db)
 ):
     # Retrieve the latest version of all active rules for the tenant
     query = select(Rule).where(Rule.tenant_id == tenant_id, Rule.is_active == True)
-    if status:
-        query = query.where(Rule.status == status)
-    
+    if status_filter:
+        query = query.where(Rule.status == status_filter)
+
     result = await db.execute(query)
     rules = result.scalars().all()
-    
+
     # Filter to get only the highest version for each rule_uuid
-    latest_rules = {}
+    latest_rules: dict = {}
     for r in rules:
         if r.rule_uuid not in latest_rules or r.version > latest_rules[r.rule_uuid].version:
             latest_rules[r.rule_uuid] = r
-            
+
     return list(latest_rules.values())
+
+@router.get("/templates/packs")
+async def list_template_packs():
+    return {k: v.pack_name for k, v in TEMPLATE_PACKS.items()}
+
+@router.post("/templates/import/{pack_key}", response_model=List[RuleResponse])
+async def import_template_pack(
+    pack_key: str,
+    tenant_id: str = Header(..., alias="tenant-id"),
+    db: AsyncSession = Depends(get_db)
+):
+    if pack_key not in TEMPLATE_PACKS:
+        raise HTTPException(status_code=404, detail="Template pack not found")
+
+    imported_rules = []
+    pack = TEMPLATE_PACKS[pack_key]
+    for rule_in in pack.rules:
+        rule = Rule(
+            tenant_id=tenant_id,
+            name=rule_in.name,
+            guard=rule_in.guard,
+            field=rule_in.field,
+            operator=rule_in.operator,
+            threshold=rule_in.threshold,
+            action=rule_in.action,
+            version=1,
+            status="staging",
+            is_active=True
+        )
+        db.add(rule)
+        imported_rules.append(rule)
+
+    await db.commit()
+    for rule in imported_rules:
+        await db.refresh(rule)
+    return imported_rules
 
 @router.get("/{rule_uuid}", response_model=RuleResponse)
 async def get_rule(
     rule_uuid: str,
-    tenant_id: str = Header(...),
+    tenant_id: str = Header(..., alias="tenant-id"),
     db: AsyncSession = Depends(get_db)
 ):
     query = select(Rule).where(
@@ -118,7 +157,7 @@ async def get_rule(
         Rule.tenant_id == tenant_id,
         Rule.is_active == True
     ).order_by(Rule.version.desc()).limit(1)
-    
+
     result = await db.execute(query)
     rule = result.scalar_one_or_none()
     if not rule:
@@ -129,7 +168,7 @@ async def get_rule(
 async def update_rule(
     rule_uuid: str,
     rule_in: RuleCreate,
-    tenant_id: str = Header(...),
+    tenant_id: str = Header(..., alias="tenant-id"),
     db: AsyncSession = Depends(get_db)
 ):
     # Fetch latest rule version
@@ -138,13 +177,13 @@ async def update_rule(
         Rule.tenant_id == tenant_id,
         Rule.is_active == True
     ).order_by(Rule.version.desc()).limit(1)
-    
+
     result = await db.execute(query)
     current_rule = result.scalar_one_or_none()
     if not current_rule:
         raise HTTPException(status_code=404, detail="Rule not found")
-    
-    # Save a new version
+
+    # Save a new immutable version (versioned rule history per architecture spec)
     new_rule = Rule(
         rule_uuid=current_rule.rule_uuid,
         tenant_id=tenant_id,
@@ -166,52 +205,15 @@ async def update_rule(
 @router.delete("/{rule_uuid}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_rule(
     rule_uuid: str,
-    tenant_id: str = Header(...),
+    tenant_id: str = Header(..., alias="tenant-id"),
     db: AsyncSession = Depends(get_db)
 ):
-    # Mark all versions of this rule as inactive
+    # Mark all versions of this rule as inactive (soft delete — audit trail preserved)
     query = update(Rule).where(
         Rule.rule_uuid == rule_uuid,
         Rule.tenant_id == tenant_id
     ).values(is_active=False)
-    
+
     await db.execute(query)
     await db.commit()
     return
-
-# Templates
-@router.get("/templates/packs")
-async def list_template_packs():
-    return {k: v.pack_name for k, v in TEMPLATE_PACKS.items()}
-
-@router.post("/templates/import/{pack_key}", response_model=List[RuleResponse])
-async def import_template_pack(
-    pack_key: str,
-    tenant_id: str = Header(...),
-    db: AsyncSession = Depends(get_db)
-):
-    if pack_key not in TEMPLATE_PACKS:
-        raise HTTPException(status_code=404, detail="Template pack not found")
-    
-    imported_rules = []
-    pack = TEMPLATE_PACKS[pack_key]
-    for rule_in in pack.rules:
-        rule = Rule(
-            tenant_id=tenant_id,
-            name=rule_in.name,
-            guard=rule_in.guard,
-            field=rule_in.field,
-            operator=rule_in.operator,
-            threshold=rule_in.threshold,
-            action=rule_in.action,
-            version=1,
-            status="staging",
-            is_active=True
-        )
-        db.add(rule)
-        imported_rules.append(rule)
-        
-    await db.commit()
-    for rule in imported_rules:
-        await db.refresh(rule)
-    return imported_rules

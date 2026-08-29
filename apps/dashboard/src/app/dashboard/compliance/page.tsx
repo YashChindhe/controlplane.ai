@@ -4,7 +4,7 @@ import React from 'react';
 import DashboardLayout from '@/components/dashboard-layout';
 import { Award, AlertTriangle, ShieldCheck, HelpCircle } from 'lucide-react';
 
-const regulations = [
+const MOCK_REGULATIONS = [
   {
     id: "gdpr",
     name: "GDPR (Article 32 / PII)",
@@ -36,6 +36,100 @@ const regulations = [
 ];
 
 export default function CompliancePage() {
+  const [useMockData, setUseMockData] = React.useState(false);
+  const [regs, setRegs] = React.useState<any[]>([]);
+
+  React.useEffect(() => {
+    const checkState = () => {
+      const mock = localStorage.getItem('useMockData');
+      setUseMockData(mock === 'true');
+    };
+    checkState();
+    window.addEventListener('storage', checkState);
+    return () => window.removeEventListener('storage', checkState);
+  }, []);
+
+  React.useEffect(() => {
+    async function fetchLiveData() {
+      if (useMockData) {
+        setRegs(MOCK_REGULATIONS);
+        return;
+      }
+
+      try {
+        const res = await fetch('http://localhost:8002/audit', {
+          headers: { 'tenant-id': 'default' }
+        });
+        
+        if (res.ok) {
+          const data = await res.json();
+          const events = data.events || [];
+
+          // Map events to regulatory categories
+          let gdprViolations = 0;
+          let hipaaViolations = 0;
+          let euAiActViolations = 0;
+          let internalViolations = 0;
+
+          events.forEach((e: any) => {
+            const evalData = e.evaluation || {};
+            if (evalData.responsibility?.hasPii) {
+              gdprViolations++;
+              if (evalData.responsibility.matchedEntities?.includes('SSN')) {
+                hipaaViolations++;
+              }
+            }
+            if (evalData.performance?.score < 70) euAiActViolations++;
+            if (evalData.cost?.density < 0.5) internalViolations++;
+          });
+
+          // Generate dynamic heatmap blocks based on total events
+          const heatmapBase = Array(30).fill(0);
+          
+          setRegs([
+            {
+              id: 'gdpr',
+              name: 'GDPR / CCPA',
+              description: 'General Data Protection Regulation. Redacts PII including names, emails, phones, and addresses.',
+              status: gdprViolations > 5 ? 'review' : 'compliant',
+              violations: gdprViolations,
+              heatmap: heatmapBase.map((_, i) => i > 25 ? Math.floor(gdprViolations / 3) : 0)
+            },
+            {
+              id: 'hipaa',
+              name: 'HIPAA',
+              description: 'Health Insurance Portability Act. Ensures medical IDs and SSNs are fully blocked.',
+              status: hipaaViolations > 0 ? 'review' : 'compliant',
+              violations: hipaaViolations,
+              heatmap: heatmapBase.map((_, i) => i > 25 ? Math.floor(hipaaViolations / 2) : 0)
+            },
+            {
+              id: 'eu-ai-act',
+              name: 'EU AI Act (Annex III)',
+              description: 'High-Risk AI Systems regulation. Demands strict bounds on hallucination and bias.',
+              status: euAiActViolations > 2 ? 'review' : 'compliant',
+              violations: euAiActViolations,
+              heatmap: heatmapBase.map((_, i) => i > 25 ? Math.floor(euAiActViolations / 2) : 0)
+            },
+            {
+              id: 'internal',
+              name: 'Internal Spend Policy',
+              description: 'Corporate governance for AI compute efficiency and maximum token allowances.',
+              status: internalViolations > 5 ? 'review' : 'compliant',
+              violations: internalViolations,
+              heatmap: heatmapBase.map((_, i) => i > 25 ? Math.floor(internalViolations / 2) : 0)
+            }
+          ]);
+        } else {
+          setRegs([]);
+        }
+      } catch (err) {
+        console.error("Failed to fetch compliance analytics:", err);
+      }
+    }
+    fetchLiveData();
+  }, [useMockData]);
+
   return (
     <DashboardLayout>
       <div className="page-header">
@@ -46,7 +140,7 @@ export default function CompliancePage() {
       </div>
 
       <div className="matrix-grid">
-        {regulations.map((reg) => (
+        {regs.map((reg) => (
           <div key={reg.id} className={`reg-card ${reg.status}`}>
             <div className="card-header">
               <div className="title-area">
@@ -81,12 +175,20 @@ export default function CompliancePage() {
         <div className="score-wrapper">
           <div className="score-meter">
             <div className="score-fill"></div>
-            <span className="score-text">92%</span>
+            <span className="score-text">{useMockData ? '92%' : 'N/A'}</span>
           </div>
           <div className="summary-details">
             <p className="summary-p">
-              <strong>92/100 Governance Rating.</strong> Your models are actively redacting PII according to GDPR and HIPAA frameworks.
-              The recent hallucination surge on <code>llama-3-70b</code> generated minor warning events mapping to EU AI Act quality metrics.
+              {useMockData ? (
+                <>
+                  <strong>92/100 Governance Rating.</strong> Your models are actively redacting PII according to GDPR and HIPAA frameworks.
+                  The recent hallucination surge on <code>llama-3-70b</code> generated minor warning events mapping to EU AI Act quality metrics.
+                </>
+              ) : (
+                <>
+                  <strong>No Rating Available.</strong> Enable mock data or connect to a live environment to generate a compliance score.
+                </>
+              )}
             </p>
           </div>
         </div>
