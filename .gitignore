@@ -4,4 +4,3 @@ dist/
 .env.local
 model_artifacts/
 *.log
-package-lock.json
