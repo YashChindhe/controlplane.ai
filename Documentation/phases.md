@@ -22,16 +22,16 @@ Each milestone is a shippable unit — at the end of every milestone, the system
 **Goal**: Stand up the project skeleton and deliver a working transparent proxy that can sit in front of any LLM with zero modification to behavior.
 
 **Deliverables**:
-- Monorepo initialized with the folder structure defined in `architecture.md`
-- `apps/gateway/` — Node.js + Fastify + TypeScript server
-  - OpenAI-compatible `/v1/chat/completions` endpoint (non-streaming + streaming)
-  - Transparent SSE pass-through proxy to OpenAI, Anthropic, Azure OpenAI
-  - Tenant API key auth middleware (stub: accept any valid-format key)
-  - Rate limiter middleware (per-tenant, Redis-backed)
-  - Request/response logging to console (structured JSON)
-- `docker-compose.yml` — Gateway + Redis + Postgres running locally
-- Health check endpoints `/health`, `/ready`
-- Basic GitHub Actions CI: lint + typecheck on push
+- [x] Monorepo initialized with the folder structure defined in `architecture.md`
+- [x] `apps/gateway/` — Node.js + Fastify + TypeScript server
+  - [x] OpenAI-compatible `/v1/chat/completions` endpoint (non-streaming + streaming)
+  - [x] Transparent SSE pass-through proxy to OpenAI, Anthropic, Azure OpenAI
+  - [x] Tenant API key auth middleware (stub: accept any valid-format key)
+  - [x] Rate limiter middleware (per-tenant, Redis-backed)
+  - [x] Request/response logging to console (structured JSON)
+- [x] `docker-compose.yml` — Gateway + Redis + Postgres running locally
+- [x] Health check endpoints `/health`, `/ready`
+- [x] Basic GitHub Actions CI: lint + typecheck on push
 
 **Success Criteria**: A developer can point their OpenAI SDK at `http://localhost:3000/v1` and get identical responses to hitting OpenAI directly. Streaming works. Latency overhead < 5ms (proxy-only, no evaluation yet).
 
