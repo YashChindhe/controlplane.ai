@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.env
+.env.local
+model_artifacts/
+*.log
+package-lock.json
