@@ -17,7 +17,7 @@ Each milestone is a shippable unit — at the end of every milestone, the system
 
 ---
 
-### Milestone 1.1 — Monorepo Foundation & Transparent Proxy (Weeks 1–2)
+### Milestone 1.1 — Monorepo Foundation & Transparent Proxy (Weeks 1–2) [COMPLETED]
 
 **Goal**: Stand up the project skeleton and deliver a working transparent proxy that can sit in front of any LLM with zero modification to behavior.
 

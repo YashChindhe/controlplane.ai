@@ -20,7 +20,15 @@
 
 ### Documentation Phase (Session 1 — 2026-08-29)
 
-All six documentation files have been authored with full depth. No code has been written yet. The documentation phase is **complete**.
+All six documentation files have been authored with full depth. The documentation phase is **complete**.
+
+### Phase 1, Milestone 1.1 (Session 2 — 2026-08-29)
+Initialized monorepo scaffolding, base TypeScript configurations, docker-compose configuration, and GitHub Actions CI workflow. Implemented `@controlplane/gateway` (Fastify + TypeScript) with:
+- Auth and tenant resolution middleware stubs
+- Dynamic rate-limiting middleware with Redis connection error tolerance and in-memory fallback
+- Structured Pino logging with SHA-256 content hashing to ensure tenant data privacy
+- Transparent OpenAI-compatible `/v1/chat/completions` pass-through proxy with full SSE streaming and non-streaming support
+- Integrated health check endpoints and unit tests verifying health routes.
 
 | File | Status | Summary |
 |---|---|---|
@@ -47,24 +55,19 @@ All six documentation files have been authored with full depth. No code has been
 
 ## Which Is Currently Being Worked On
 
-**Status: Documentation Phase Complete — Ready to begin Phase 1, Milestone 1 coding.**
+**Status: Phase 1, Milestone 1.1 Complete — Ready to begin Milestone 1.2 stream interception & evaluation loop.**
 
-The next task is to begin implementation of the foundation layer:
-
-### Next Up: Phase 1, Milestone 1 — Project Scaffolding & Proxy Gateway Foundation
+### Next Up: Phase 1, Milestone 1.2 — Tri-Guard Service Foundation & Stream Interception
 
 **Sprint work items (do these in order):**
 
-1. [ ] Initialize monorepo structure using the folder layout in `architecture.md`
-2. [ ] Set up `apps/gateway/` — Node.js + Fastify server with TypeScript
-3. [ ] Implement auth middleware (JWT + API key validation stubs)
-4. [ ] Implement OpenAI-compatible `/v1/chat/completions` route (non-streaming first)
-5. [ ] Implement SSE streaming proxy pass-through (no evaluation yet — transparent proxy)
-6. [ ] Set up `docker-compose.yml` for local development (gateway + Redis + Postgres)
-7. [ ] Set up `apps/tri-guard/` — Python FastAPI service skeleton
-8. [ ] Stub out the three Guard modules (performance, cost, responsibility) with mock scorers
-9. [ ] Wire stream-interceptor.ts to call the Tri-Guard stub service per chunk
-10. [ ] Implement basic Action Matrix resolver (pass-through only, logging to console)
+1. [ ] Set up `apps/tri-guard/` — Python FastAPI service skeleton with gRPC/HTTP endpoint
+2. [ ] Stub out the three Guard modules (Performance, Cost, Responsibility) with mock scorers
+3. [ ] Implement stream-interceptor.ts in `apps/gateway` with a sliding 50-token evaluation window
+4. [ ] Wire stream-interceptor.ts to call the Tri-Guard service per window asynchronously
+5. [ ] Implement Verdict Aggregator and Action Matrix resolver in gateway
+6. [ ] Set up Kafka in docker-compose for async audit logging
+7. [ ] Verify chunk redaction, event logging, and blocking responses (GovernanceViolationError)
 
 **Do NOT start**: Dashboard UI, Policy Studio, Audit Vault, SDKs — these are Milestone 3+ work.
 
