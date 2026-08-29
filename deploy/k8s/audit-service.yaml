@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: audit-service
+  labels:
+    app: audit-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: audit-service
+  template:
+    metadata:
+      labels:
+        app: audit-service
+    spec:
+      containers:
+        - name: audit-service
+          image: audit-service:latest
+          ports:
+            - containerPort: 8002
+          resources:
+            limits:
+              cpu: 500m
+              memory: 512Mi
+            requests:
+              cpu: 250m
+              memory: 256Mi
+          env:
+            - name: ELASTICSEARCH_URL
+              value: "http://elasticsearch:9200"
+            - name: KAFKA_BROKERS
+              value: "kafka:9092"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: audit-service
+spec:
+  ports:
+    - port: 8002
+      targetPort: 8002
+      protocol: TCP
+  selector:
+    app: audit-service
+  type: ClusterIP

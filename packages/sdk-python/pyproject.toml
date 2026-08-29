@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "controlplane-sdk"
+version = "0.1.0"
+description = "Python SDK client for ControlPlane.ai (Tri-Guard) governance gateway"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "openai>=1.0.0"
+]

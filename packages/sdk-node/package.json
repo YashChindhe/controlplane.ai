@@ -1,0 +1,18 @@
+{
+  "name": "@controlplane/sdk",
+  "version": "0.1.0",
+  "description": "Node.js/TypeScript SDK client wrapper for ControlPlane.ai Gateway",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "openai": "^4.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}
