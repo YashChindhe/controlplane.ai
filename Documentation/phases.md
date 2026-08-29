@@ -116,30 +116,30 @@ Each milestone is a shippable unit — at the end of every milestone, the system
 
 ---
 
-### Milestone 1.5 — Policy Studio & Audit Vault (Weeks 10–11)
+### Milestone 1.5 — Policy Studio & Audit Vault (Weeks 10–11) [COMPLETED]
 
 **Goal**: Give compliance officers and AI leads self-service control over governance rules without writing code. Give auditors a searchable, exportable log.
 
 **Deliverables**:
-- `apps/policy-service/` — FastAPI + PostgreSQL
-  - Rule CRUD API: create, read, update, delete, list rules
-  - Rule versioning: every save creates a new immutable version
-  - Rule deployment API: promote rule version from staging → production
-  - Pre-built template library: GDPR PII Pack (5 rules), HIPAA Data Pack (4 rules), EU AI Act Annex III Pack (3 rules)
-- **Policy Studio UI** (`/policy-studio`):
-  - Visual rule builder: condition editor (guard + field + operator + threshold) + action selector
-  - Rule list view with version history
-  - Rule testing sandbox: paste sample text, run dry-run against current policy, see triggered rules
-  - Template library: browse and import pre-built packs
-- `apps/audit-service/` — FastAPI + Elasticsearch
-  - Kafka consumer → Elasticsearch index writer (per-tenant index)
-  - S3 WORM archive writer (sync of audit events to S3 Object Lock)
-  - Query API: full-text search, filter by date, guard, action, severity
-  - Export API: download audit events as CSV, JSON, or PDF report
-- **Audit Vault UI** (`/audit-vault`):
-  - Searchable audit log table with filters
-  - Event detail modal: full request hash, response hash, all three risk scores, action taken, rules triggered
-  - Export button: trigger CSV/JSON/PDF download
+- [x] `apps/policy-service/` — FastAPI + PostgreSQL
+  - [x] Rule CRUD API: create, read, update, delete, list rules
+  - [x] Rule versioning: every save creates a new immutable version
+  - [x] Rule deployment API: promote rule version from staging → production
+  - [x] Pre-built template library: GDPR PII Pack (5 rules), HIPAA Data Pack (4 rules), EU AI Act Annex III Pack (3 rules)
+- [x] **Policy Studio UI** (`/policy-studio`):
+  - [x] Visual rule builder: condition editor (guard + field + operator + threshold) + action selector
+  - [x] Rule list view with version history
+  - [x] Rule testing sandbox: paste sample text, run dry-run against current policy, see triggered rules
+  - [x] Template library: browse and import pre-built packs
+- [x] `apps/audit-service/` — FastAPI + Elasticsearch
+  - [x] Kafka consumer → Elasticsearch index writer (per-tenant index)
+  - [x] S3 WORM archive writer (sync of audit events to S3 Object Lock)
+  - [x] Query API: full-text search, filter by date, guard, action, severity
+  - [x] Export API: download audit events as CSV, JSON, or PDF report
+- [x] **Audit Vault UI** (`/audit-vault`):
+  - [x] Searchable audit log table with filters
+  - [x] Event detail modal: full request hash, response hash, all three risk scores, action taken, rules triggered
+  - [x] Export button: trigger CSV/JSON/PDF download
 
 **Success Criteria**: A compliance officer can create a new PII rule in Policy Studio with no code, deploy it to staging, test it, and promote it to production in under 10 minutes. Audit Vault shows all events from the last 30 days, searchable.
 

@@ -3,12 +3,14 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Shield, Activity, BarChart3, Award, Settings, LogOut, Menu } from 'lucide-react';
+import { Shield, Activity, BarChart3, Award, Settings, LogOut, Menu, Sliders, Archive } from 'lucide-react';
 
 const navItems = [
   { name: 'Live Feed', href: '/dashboard/live-feed', icon: Activity },
   { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
   { name: 'Compliance', href: '/dashboard/compliance', icon: Award },
+  { name: 'Policy Studio', href: '/dashboard/policy-studio', icon: Sliders },
+  { name: 'Audit Vault', href: '/dashboard/audit-vault', icon: Archive },
 ];
 
 export default function Sidebar() {

@@ -72,22 +72,30 @@ Replaced stub guards with real machine learning models and heuristics:
 - Created a robust startup pipeline to download required ONNX models directly from HuggingFace Hub.
 - Wrote and executed automated unit tests and a performance benchmarking script (`benchmark.py`), achieving average latency under 50ms.
 
+### Phase 1, Milestone 1.4 (Session 5 — 2026-08-29)
+Implemented the core real-time observability UI and WebSocket connection:
+- Set up `@controlplane/dashboard` Next.js 14 application using App Router.
+- Implemented the styling design system in `globals.css` with CSS Custom Properties from `design.md`.
+- Integrated NextAuth.js v5 for credential-based authentication.
+- Built the Live Feed page (`/dashboard/live-feed`) with WebSocket connection to display real-time audit events.
+- Built the Analytics page (`/dashboard/analytics`) featuring Recharts timelines for risk scores and costs.
+- Built the Compliance page (`/dashboard/compliance`) showing the regulation violation heatmap.
+- Created the WebSocket gateway in the proxy service to stream events from Kafka to dashboard clients.
+
 ---
 
 ## Which Is Currently Being Worked On
 
-**Status: Phase 1, Milestone 1.3 Complete — Ready to begin Milestone 1.4: Governance Dashboard v1.**
+**Status: Phase 1, Milestone 1.4 Complete — Ready to begin Milestone 1.5: Policy Studio & Audit Vault.**
 
-### Next Up: Phase 1, Milestone 1.4 — Governance Dashboard v1
+### Next Up: Phase 1, Milestone 1.5 — Policy Studio & Audit Vault
 
 **Sprint work items (do these in order):**
 
-1. [ ] Set up `@controlplane/dashboard` Next.js application skeleton using App Router.
-2. [ ] Implement the styling design system in `globals.css` with CSS Custom Properties from `design.md`.
-3. [ ] Integrate NextAuth.js v5 for credential-based authentication.
-4. [ ] Build the Live Feed page (`/dashboard/live-feed`) with WebSocket connection to display real-time audit events.
-5. [ ] Build the Analytics page (`/dashboard/analytics`) featuring Recharts timelines for risk scores and costs.
-6. [ ] Build the Compliance page (`/dashboard/compliance`) showing the custom D3.js/recharts heatmap of regulations vs. days.
+1. [ ] Create `apps/policy-service` (FastAPI + PostgreSQL) for rule CRUD, versioning, deployment, and template library.
+2. [ ] Implement Policy Studio UI in `@controlplane/dashboard` with visual rule builder, version history, rule sandbox, and template library.
+3. [ ] Create `apps/audit-service` (FastAPI + Elasticsearch + S3 WORM) for consuming audit events and querying/exporting them.
+4. [ ] Implement Audit Vault UI in `@controlplane/dashboard` with searchable logs, detail modals, and CSV/PDF export options.
 
 ---
 
