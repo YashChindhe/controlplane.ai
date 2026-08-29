@@ -14,7 +14,7 @@ export async function dashboardWebsocketRoutes(fastify: FastifyInstance) {
       unsubscribe();
     });
 
-    connection.socket.on('error', (err) => {
+    connection.socket.on('error', (err: Error) => {
       fastify.log.error(err, 'WebSocket error');
       unsubscribe();
     });
