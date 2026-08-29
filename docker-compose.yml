@@ -78,8 +78,51 @@ services:
       redpanda:
         condition: service_healthy
 
+  gateway:
+    build:
+      context: .
+      dockerfile: ./apps/gateway/Dockerfile
+    container_name: controlplane-gateway
+    environment:
+      - PORT=3000
+      - HOST=0.0.0.0
+      - REDIS_URL=redis://redis:6379
+      - KAFKA_BROKERS=redpanda:9092
+      - TRI_GUARD_URL=http://host.docker.internal:8000
+      - POLICY_SERVICE_URL=http://policy-service:8001
+      - AUDIT_SERVICE_URL=http://audit-service:8002
+    ports:
+      - "3000:3000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      policy-service:
+        condition: service_started
+      audit-service:
+        condition: service_started
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: ./apps/dashboard/Dockerfile
+    container_name: controlplane-dashboard
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - HOST=0.0.0.0
+    depends_on:
+      - gateway
+
 volumes:
   postgres_data:
   redis_data:
   redpanda_data:
+
 

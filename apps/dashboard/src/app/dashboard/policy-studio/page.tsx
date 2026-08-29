@@ -9,7 +9,7 @@ interface Rule {
   name: string;
   guard: string;
   field: string;
-  operator: str;
+  operator: string;
   threshold: string;
   action: string;
   version: number;
