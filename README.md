@@ -41,6 +41,10 @@ Beyond the core engine, ControlPlane.ai exposes:
 - **Streamlined UI**: Removed the mock 'Admin/Viewer' toggle and initial 'Sign In' screens to provide immediate, frictionless access to the platform's core governance features.
 - **Dynamic Real-Time Observability**: The Analytics and Audit Vault dashboards now feature dynamic auto-polling, seamlessly updating charts and tables in real-time as the Gateway intercepts new LLM traffic.
 - **Persistent WORM Storage Management**: The Audit Service's history clearing capabilities have been upgraded to dynamically wipe immutable WORM archives directly from the disk for local testing environments.
+- **Provider Configurations**: Added dynamic, database-backed UI controls to seamlessly add and securely delete AI Provider credentials (like OpenAI or Ollama endpoints).
+- **Extended Tri-Guard Scope**: Upgraded the streaming and non-streaming interception pipelines to evaluate the entire context window (User Prompt + Model Response), detecting PII even if the LLM refuses to generate a violation.
+- **Network Hardening**: Enforced explicit IPv4 `127.0.0.1` routing across all inter-service communications (Node.js/Fastify → Python/FastAPI) to eliminate IPv6 ECONNREFUSED issues on Windows.
+- **True Passthrough Mode**: Hardened the test playground's 'mock' bypass logic, allowing users to successfully proxy real requests to local models (e.g., `qwen2.5` via Ollama) on port 11434.
 
 ## Getting Started
 
