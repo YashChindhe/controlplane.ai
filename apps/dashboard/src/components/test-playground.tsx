@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Send, Terminal, Loader2, Info } from 'lucide-react';
 
 export default function TestPlayground() {
-  const [model, setModel] = useState('gpt-4o');
+  const [model, setModel] = useState('qwen2.5:3b');
   const [prompt, setPrompt] = useState('Analyze patient dossier and extract medication regimen.');
   const [loading, setLoading] = useState(false);
   const [lastResult, setLastResult] = useState<string | null>(null);
@@ -16,7 +16,7 @@ export default function TestPlayground() {
     setLastResult(null);
 
     try {
-      const response = await fetch('http://localhost:3000/v1/chat/completions', {
+      const response = await fetch('http://127.0.0.1:3000/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -58,11 +58,13 @@ export default function TestPlayground() {
           <label>Select Model to Test</label>
           <div className="model-selector">
             <select value={model} onChange={(e) => setModel(e.target.value)}>
+              <option value="qwen2.5:3b">Custom / Ollama: qwen2.5:3b</option>
+              <option value="llama3">Custom / Ollama: llama3</option>
+              <option value="mistral">Custom / Ollama: mistral</option>
+              <option value="mock">Mock / Demo Mode</option>
               <option value="gpt-4o">OpenAI: gpt-4o</option>
               <option value="gpt-3.5-turbo">OpenAI: gpt-3.5-turbo</option>
               <option value="claude-3-5-sonnet-20240620">Anthropic: claude-3-5-sonnet</option>
-              <option value="llama3">Custom / Ollama: llama3</option>
-              <option value="mistral">Custom / Ollama: mistral</option>
             </select>
           </div>
         </div>
