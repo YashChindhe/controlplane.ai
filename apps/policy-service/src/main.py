@@ -5,11 +5,13 @@ from contextlib import asynccontextmanager
 from src.db import Base, engine
 from src.routes.rules import router as rules_router
 from src.routes.deploy import router as deploy_router
+from src.routes.providers import router as providers_router
 
 from fastapi.middleware.cors import CORSMiddleware
 
 from sqlalchemy import select
 from src.models.rule import Rule
+from src.models.tenant_provider import TenantProvider
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -60,6 +62,7 @@ app.add_middleware(
 
 app.include_router(rules_router, prefix="/rules", tags=["Rules"])
 app.include_router(deploy_router, prefix="/deploy", tags=["Deploy"])
+app.include_router(providers_router, prefix="/api", tags=["Providers"])
 
 @app.get("/health")
 def health_check():

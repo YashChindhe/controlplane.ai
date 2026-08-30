@@ -4,3 +4,4 @@ pydantic==2.6.4
 sqlalchemy>=2.0.0
 asyncpg>=0.29.0
 python-dotenv>=1.0.0
+cryptography>=41.0.0

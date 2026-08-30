@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, Filter, Download, Calendar, Activity, AlertOctagon, MoreVertical, X, ArrowLeft } from 'lucide-react';
+import { Search, Filter, Download, Calendar, Activity, AlertOctagon, MoreVertical, X, ArrowLeft, Trash2 } from 'lucide-react';
 
 // The Audit Vault UI supports two event schemas:
 // 1. Direct audit-service schema: { guard, action, severity, metrics, rulesTriggered, contentHash }
@@ -134,7 +134,7 @@ export default function AuditVault() {
 
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<AuditEvent | null>(null);
-  const [tenantId] = useState('default');
+  const tenantId = 'default';
   const [searchQuery, setSearchQuery] = useState('');
   const [guardFilter, setGuardFilter] = useState('');
   const [actionFilter, setActionFilter] = useState('');
@@ -176,6 +176,10 @@ export default function AuditVault() {
 
   useEffect(() => {
     fetchEvents();
+    
+    // Auto-refresh every 10 seconds to dynamically update
+    const interval = setInterval(fetchEvents, 10000);
+    return () => clearInterval(interval);
   }, [searchQuery, guardFilter, actionFilter, severityFilter, useMockData]);
 
   const handleExport = () => {
@@ -187,6 +191,20 @@ export default function AuditVault() {
     queryParams.append('format', 'csv');
 
     window.open(`http://localhost:8002/audit/export?${queryParams.toString()}`);
+  };
+
+  const handleClearHistory = async () => {
+    // Optimistically clear the UI immediately
+    setEvents([]);
+    
+    try {
+      await fetch('http://localhost:8002/audit', {
+        method: 'DELETE',
+        headers: { 'tenant-id': tenantId }
+      });
+    } catch (err) {
+      console.warn("Backend is offline, but UI was cleared.");
+    }
   };
 
   return (
@@ -202,10 +220,16 @@ export default function AuditVault() {
           </div>
         </div>
         {isAdmin && (
-          <button className="export-btn" onClick={handleExport}>
-            <Download className="icon" />
-            <span>Export Logs (CSV)</span>
-          </button>
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <button className="export-btn clear-history" onClick={handleClearHistory} disabled={useMockData} style={{ borderColor: 'rgba(239, 68, 68, 0.3)', color: 'var(--color-brand-red)' }}>
+              <Trash2 className="icon" size={16} />
+              <span>Clear History</span>
+            </button>
+            <button className="export-btn" onClick={handleExport}>
+              <Download className="icon" size={16} />
+              <span>Export Logs (CSV)</span>
+            </button>
+          </div>
         )}
       </header>
 

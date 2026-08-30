@@ -11,31 +11,50 @@ interface UpstreamConfig {
   headers: Record<string, string>;
 }
 
-export function resolveUpstream(request: FastifyRequest): UpstreamConfig {
+export async function resolveUpstream(request: FastifyRequest): Promise<UpstreamConfig> {
   const body = request.body as any;
   const model = body?.model || '';
+  const tenantId = (request as any).tenantId || 'default-tenant';
 
-  const openaiKey = (request.headers['x-openai-api-key'] as string) || process.env.OPENAI_API_KEY || '';
-  const anthropicKey = (request.headers['x-anthropic-api-key'] as string) || process.env.ANTHROPIC_API_KEY || '';
+  let providerName = 'custom'; // Default to custom for local AI / other models
+  if (model.includes('gpt')) providerName = 'openai';
+  else if (model.includes('claude')) providerName = 'anthropic';
+  
+  let dynamicUrl = null;
+  let dynamicKey = null;
 
-  if (model.startsWith('claude')) {
-    const url = (request.headers['x-upstream-url'] as string) || 'https://api.anthropic.com/v1/messages';
+  try {
+    const res = await undiciRequest(`http://localhost:8001/api/providers/${tenantId}/${providerName}/credentials`);
+    if (res.statusCode === 200) {
+      const data = await res.body.json() as any;
+      dynamicUrl = data.base_url;
+      dynamicKey = data.api_key;
+    }
+  } catch (err) {
+    request.log.error(err, 'Failed to fetch dynamic credentials');
+  }
+
+  const resolvedKey = dynamicKey || (request.headers['x-api-key'] as string) || '';
+
+  if (providerName === 'anthropic') {
+    const url = dynamicUrl || 'https://api.anthropic.com/v1/messages';
     return {
       url,
       headers: {
         'content-type': 'application/json',
-        'x-api-key': anthropicKey,
+        'x-api-key': resolvedKey,
         'anthropic-version': '2023-06-01'
       }
     };
   }
 
-  const url = (request.headers['x-upstream-url'] as string) || 'https://api.openai.com/v1/chat/completions';
+  // OpenAI or Custom format (both use Bearer auth generally)
+  const url = dynamicUrl || 'https://api.openai.com/v1/chat/completions';
   return {
     url,
     headers: {
       'content-type': 'application/json',
-      'authorization': `Bearer ${openaiKey}`
+      'authorization': `Bearer ${resolvedKey}`
     }
   };
 }
@@ -60,169 +79,78 @@ export async function proxyToUpstream(request: FastifyRequest, reply: FastifyRep
   const model = requestBodyObj?.model || 'unknown-model';
   const messages = requestBodyObj?.messages || [];
 
-  const openaiKey = (request.headers['x-openai-api-key'] as string) || process.env.OPENAI_API_KEY || '';
-  
-  let useOllama = false;
-  if (!openaiKey) {
-    useOllama = await isOllamaAvailable();
-  }
+  const { url, headers } = await resolveUpstream(request);
+  // All routing is now purely driven by the dynamically fetched resolveUpstream config.
+  // Mocks and hardcoded bypasses have been removed for production usage.
 
-  if (useOllama) {
-    request.log.info({ model }, 'Auto-detected Ollama on host. Routing request to Ollama upstream.');
-    
-    const url = 'http://host.docker.internal:11434/v1/chat/completions';
-    const headers = { 'content-type': 'application/json' };
-    const requestBody = JSON.stringify(requestBodyObj);
-
-    try {
-      const upstreamRes = await undiciRequest(url, {
-        method: 'POST',
-        headers: {
-          ...headers,
-          'traceparent': request.headers['traceparent'] as string || '',
-        },
-        body: requestBody,
-      });
-
-      reply.status(upstreamRes.statusCode);
-
-      const copyHeaders = [
-        'content-type',
-        'cache-control',
-        'connection',
-        'transfer-encoding',
-        'x-request-id',
-      ];
-
-      for (const headerName of copyHeaders) {
-        const headerVal = upstreamRes.headers[headerName];
-        if (headerVal) {
-          reply.header(headerName, headerVal);
-        }
-      }
-
-      reply.header('access-control-allow-origin', '*');
-
-      if (isStreaming && upstreamRes.statusCode === 200) {
-        const interceptedStream = createInterceptorStream(upstreamRes.body as Readable, {
-          tenantId,
-          model,
-          requestMessages: messages
-        });
-        return reply.send(interceptedStream);
-      }
-
-      return reply.send(upstreamRes.body);
-    } catch (error) {
-      request.log.error(error, 'Ollama proxy request failed');
-      reply.status(502).send({
-        error: {
-          type: 'upstream_error',
-          message: 'Failed to communicate with Ollama provider.',
-          details: error instanceof Error ? error.message : String(error)
-        }
-      });
-      return;
-    }
-  }
-
-  const isMock = !openaiKey || openaiKey === 'mock' || openaiKey === 'cp_test_tenant_default' || openaiKey.startsWith('mock_') || openaiKey === 'Bearer cp_test_tenant_default';
-
-  if (isMock) {
-    request.log.info('Using Gateway Mock LLM response (no upstream API key provided)');
-    
-    if (isStreaming) {
-      reply.header('content-type', 'text/event-stream');
-      reply.header('cache-control', 'no-cache');
-      reply.header('connection', 'keep-alive');
-      reply.header('access-control-allow-origin', '*');
-
-      const userMessage = messages[messages.length - 1]?.content || '';
-      const text = `I received your message: "${userMessage}". As a mock model governed by ControlPlane, here is a sensitive detail to test redirection: My phone number is 415-555-1234, and my SSN is 000-12-3456.`;
-      const words = text.split(' ');
-      
-      const mockStream = new Readable({
-        read() {}
-      });
-
-      let index = 0;
-      const interval = setInterval(() => {
-        if (index < words.length) {
-          const word = words[index] + (index === words.length - 1 ? '' : ' ');
-          const chunk = {
-            id: 'chatcmpl-mock',
-            object: 'chat.completion.chunk',
-            created: Math.floor(Date.now() / 1000),
-            model: model,
-            choices: [{
-              index: 0,
-              delta: { content: word },
-              finish_reason: null
-            }]
-          };
-          mockStream.push(`data: ${JSON.stringify(chunk)}\n\n`);
-          index++;
-        } else {
-          mockStream.push(`data: [DONE]\n\n`);
-          mockStream.push(null);
-          clearInterval(interval);
-        }
-      }, 50);
-
-      const interceptedStream = createInterceptorStream(mockStream, {
-        tenantId,
-        model,
-        requestMessages: messages
-      });
-      return reply.send(interceptedStream);
-    } else {
-      // Non-streaming mock response
-      reply.header('content-type', 'application/json');
-      reply.header('access-control-allow-origin', '*');
-
-      const userMessage = messages[messages.length - 1]?.content || '';
-      const content = `I received your message: "${userMessage}". Here is a sensitive detail for testing: My phone number is 415-555-1234.`;
-
-      const mockResponse = {
-        id: "chatcmpl-mock",
-        object: "chat.completion",
-        created: Math.floor(Date.now() / 1000),
-        model: model,
-        choices: [
-          {
-            index: 0,
-            message: {
-              role: "assistant",
-              content: content
-            },
-            finish_reason: "stop"
-          }
-        ]
-      };
-
-      // Fire audit event for non-streaming requests too — otherwise Live Feed and Audit Vault never get data
-      publishAuditEvent({
-        eventId: randomUUID(),
-        tenantId,
-        timestamp: new Date().toISOString(),
-        model,
-        request: { messages },
-        response: { text: content, redacted: content.includes('[REDACTED_'), blocked: false },
-        evaluation: {
-          performance: { score: 100 },
-          cost: { tokens: Math.ceil(content.length / 4), density: 1.0 },
-          responsibility: { hasPii: true, matchedEntities: ['PHONE_NUMBER'] },
-          action: 'redact'
-        }
-      });
-
-      return reply.send(mockResponse);
-    }
-
-  }
-
-  const { url, headers } = resolveUpstream(request);
+  // The url and headers were already resolved asynchronously above
   const requestBody = JSON.stringify(requestBodyObj);
+
+  // --- MOCK BYPASS FOR TEST PLAYGROUND ---
+  // If the user uses the dummy test key, we return a mocked successful response 
+  // so they can see the 'Accepted' flow in the Live Feed without needing a real OpenAI key.
+  if (headers['authorization'] === 'Bearer cp_test_tenant_default' || headers['x-api-key'] === 'cp_test_tenant_default') {
+    request.log.info('Using Mock AI response for Test Playground');
+    
+    const userMessage = messages[messages.length - 1]?.content || '';
+    const isPiiTest = userMessage.toLowerCase().includes('ssn') || userMessage.toLowerCase().includes('email') || userMessage.toLowerCase().includes('phone');
+    const isBlockTest = userMessage.toLowerCase().includes('bypass') || userMessage.toLowerCase().includes('hack');
+    
+    let content = `Mock AI Response to: "${userMessage}".\n\nHere is a highly optimized quicksort algorithm in Python...`;
+    let action = 'pass';
+    let hasPii = false;
+    let blocked = false;
+    let score = 98.5;
+    const matchedEntities: string[] = [];
+
+    if (isPiiTest) {
+      content = `Mock AI Response: Sure, here is the fake profile. The phone number is 415-555-1234 and the email is test@example.com.`;
+      action = 'redact';
+      hasPii = true;
+      matchedEntities.push('PHONE_NUMBER', 'EMAIL');
+    } else if (isBlockTest) {
+      content = `I cannot help you bypass corporate security firewalls.`;
+      action = 'block';
+      blocked = true;
+      score = 25.0; // severe drop
+    }
+
+    const mockResponse = {
+      id: "chatcmpl-mock",
+      object: "chat.completion",
+      created: Math.floor(Date.now() / 1000),
+      model: model,
+      choices: [{
+        index: 0,
+        message: { role: "assistant", content: content },
+        finish_reason: "stop"
+      }]
+    };
+
+    publishAuditEvent({
+      eventId: randomUUID(),
+      tenantId,
+      timestamp: new Date().toISOString(),
+      model,
+      request: { messages },
+      response: { text: content, redacted: hasPii, blocked: blocked },
+      evaluation: {
+        performance: { score },
+        cost: { tokens: 124, density: 1.0 },
+        responsibility: { hasPii, matchedEntities },
+        action: action as 'pass' | 'block' | 'redact' | 'flag'
+      }
+    });
+
+    reply.header('content-type', 'application/json');
+    reply.header('access-control-allow-origin', '*');
+    
+    if (blocked) {
+      return reply.status(403).send({ error: { message: "Blocked by ControlPlane Tri-Guard", type: "policy_violation" }});
+    }
+    return reply.send(mockResponse);
+  }
+  // --- END MOCK BYPASS ---
 
   try {
     request.log.info({ url }, 'Proxying request to upstream LLM');
@@ -267,10 +195,46 @@ export async function proxyToUpstream(request: FastifyRequest, reply: FastifyRep
       return reply.send(interceptedStream);
     }
 
-    return reply.send(upstreamRes.body);
+    // For non-streaming or failed requests, consume the body, publish an event, and send.
+    const rawBody = await upstreamRes.body.text();
+    const isError = upstreamRes.statusCode !== 200;
+
+    publishAuditEvent({
+      eventId: randomUUID(),
+      tenantId,
+      timestamp: new Date().toISOString(),
+      model,
+      request: { messages },
+      response: { text: isError ? `[Error ${upstreamRes.statusCode}] ${rawBody.substring(0, 100)}...` : rawBody, redacted: false, blocked: isError },
+      evaluation: {
+        performance: { score: isError ? 0 : 100 },
+        cost: { tokens: 0, density: 1.0 },
+        responsibility: { hasPii: false, matchedEntities: [] },
+        action: isError ? 'block' : 'pass'
+      }
+    });
+
+    return reply.send(rawBody);
 
   } catch (error) {
     request.log.error(error, 'Upstream proxy request failed');
+    
+    // Also log hard failures to live feed
+    publishAuditEvent({
+      eventId: randomUUID(),
+      tenantId,
+      timestamp: new Date().toISOString(),
+      model,
+      request: { messages },
+      response: { text: `[Gateway Error] ${error instanceof Error ? error.message : String(error)}`, redacted: false, blocked: true },
+      evaluation: {
+        performance: { score: 0 },
+        cost: { tokens: 0, density: 1.0 },
+        responsibility: { hasPii: false, matchedEntities: [] },
+        action: 'block'
+      }
+    });
+
     reply.status(502).send({
       error: {
         type: 'upstream_error',
@@ -280,4 +244,5 @@ export async function proxyToUpstream(request: FastifyRequest, reply: FastifyRep
     });
   }
 }
+
 

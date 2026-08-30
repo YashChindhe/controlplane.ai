@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Shield, Activity, BarChart3, Award, Settings, LogOut, Menu, Sliders, Archive, UserCheck, UserX } from 'lucide-react';
+import { Shield, Activity, BarChart3, Award, Settings, Menu, Sliders, Archive } from 'lucide-react';
 
 const navItems = [
   { name: 'Live Feed', href: '/dashboard/live-feed', icon: Activity },
@@ -16,13 +16,12 @@ const navItems = [
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const [isAdmin, setIsAdmin] = useState(true);
-  const [showRoleDropdown, setShowRoleDropdown] = useState(false);
   const [useMockData, setUseMockData] = useState(false);
 
   React.useEffect(() => {
-    const role = localStorage.getItem('mockRole');
-    if (role === 'viewer') setIsAdmin(false);
+    localStorage.setItem('mockRole', 'admin');
+    window.dispatchEvent(new Event('storage'));
+    
     const mock = localStorage.getItem('useMockData');
     if (mock === 'true') setUseMockData(true);
   }, []);
@@ -31,20 +30,7 @@ export default function Sidebar() {
     const newMock = !useMockData;
     setUseMockData(newMock);
     localStorage.setItem('useMockData', String(newMock));
-    // Dispatch standard storage event so other components in the same tab update immediately
     window.dispatchEvent(new Event('storage'));
-  };
-
-  const toggleRole = (newIsAdmin: boolean) => {
-    setIsAdmin(newIsAdmin);
-    localStorage.setItem('mockRole', newIsAdmin ? 'admin' : 'viewer');
-    window.dispatchEvent(new Event('storage'));
-    setShowRoleDropdown(false);
-  };
-
-  const handleExit = () => {
-    document.cookie = "auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-    router.push('/login');
   };
 
   return (
@@ -84,38 +70,15 @@ export default function Sidebar() {
           <span>{useMockData ? 'Mock Data: ON' : 'Mock Data: OFF'}</span>
         </button>
 
-        <div className="user-profile-wrapper" style={{ position: 'relative' }}>
-          <div className="user-profile" onClick={() => setShowRoleDropdown(!showRoleDropdown)} style={{ cursor: 'pointer' }} title="Account Settings">
-            <div className="user-avatar">{isAdmin ? 'AD' : 'VW'}</div>
+        <div className="user-profile-wrapper">
+          <div className="user-profile">
+            <div className="user-avatar">AD</div>
             <div className="user-details">
-              <span className="user-name">{isAdmin ? 'Admin User' : 'Viewer User'}</span>
-              <span className="user-role">{isAdmin ? 'Administrator' : 'Read-Only'}</span>
+              <span className="user-name">Admin User</span>
+              <span className="user-role">Administrator</span>
             </div>
-            <Settings size={16} className="settings-icon" />
           </div>
-          
-          {showRoleDropdown && (
-            <div className="role-dropdown">
-              <div className="dropdown-header">Switch Account</div>
-              <button 
-                className={`role-option ${isAdmin ? 'active' : ''}`}
-                onClick={() => { setIsAdmin(true); toggleRole(true); }}
-              >
-                <Shield size={14} /> Administrator
-              </button>
-              <button 
-                className={`role-option ${!isAdmin ? 'active' : ''}`}
-                onClick={() => { setIsAdmin(false); toggleRole(false); }}
-              >
-                <UserX size={14} /> Read-Only Viewer
-              </button>
-            </div>
-          )}
         </div>
-        <button className="logout-button" onClick={handleExit}>
-          <LogOut className="logout-icon" />
-          <span>Exit Console</span>
-        </button>
       </div>
 
       <style jsx>{`
@@ -166,35 +129,39 @@ export default function Sidebar() {
         }
 
         .sidebar-nav {
-          padding: 24px 16px;
+          padding: 32px 20px;
           display: flex;
           flex-direction: column;
-          gap: 4px;
+          gap: 12px;
           flex: 1;
         }
 
         .nav-item {
           display: flex;
           align-items: center;
-          gap: 12px;
-          padding: 12px 16px;
+          gap: 14px;
+          padding: 14px 18px;
           color: var(--text-secondary);
-          border-radius: var(--radius-md);
+          border-radius: 12px;
           font-size: 14px;
-          font-weight: 500;
-          transition: all var(--transition-fast);
+          font-weight: 600;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          border: 1px solid transparent;
         }
 
         .nav-item:hover {
           color: var(--text-primary);
-          background-color: var(--bg-surface-2);
+          background-color: rgba(255, 255, 255, 0.03);
+          transform: translateX(6px);
+          border-color: rgba(255, 255, 255, 0.05);
         }
 
         .nav-item.active {
-          color: var(--text-primary);
-          background-color: var(--bg-overlay);
-          border: 1px solid var(--border-brand);
-          box-shadow: inset 0 0 12px rgba(124, 58, 237, 0.15);
+          color: #ffffff;
+          background: linear-gradient(90deg, rgba(124, 58, 237, 0.15) 0%, transparent 100%);
+          border: 1px solid rgba(124, 58, 237, 0.1);
+          border-left: 4px solid var(--color-brand-violet);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         }
 
         .nav-icon {

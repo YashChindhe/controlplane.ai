@@ -83,7 +83,7 @@
 
 6. **Response Completion**: Full governed response delivered. Post-response analytics aggregated and committed to time-series store.
 
-7. **Async Processes**: Audit events flushed from queue to Audit Vault. Alert engine evaluates whether escalation thresholds are crossed. Dashboard metrics updated.
+7. **Async Processes**: Audit events flushed from queue to Audit Vault. Alert engine evaluates whether escalation thresholds are crossed. Dashboard metrics and Audit Vault dynamically auto-poll new events in real-time.
 
 ---
 
@@ -278,7 +278,7 @@ controlplane.ai/
 | Store | Technology | Purpose |
 |---|---|---|
 | **Primary Relational DB** | PostgreSQL 15 (AWS RDS) | Tenant registry, policy rules, user accounts, rule versions, alert configs |
-| **Audit Vault** | Amazon S3 (WORM-mode / Object Lock) + Elasticsearch | S3 for durable, append-only immutable storage. Elasticsearch for full-text search and time-series queries across audit events. |
+| **Audit Vault** | Amazon S3 (WORM-mode / Object Lock) + Elasticsearch | S3 for durable, append-only immutable storage (which can be dynamically wiped in local testing environments). Elasticsearch for full-text search and time-series queries across audit events. |
 | **Cache** | Redis 7 (ElastiCache) | Tenant config cache (TTL: 60s), rate limit counters, session tokens |
 | **Event Bus** | Apache Kafka (AWS MSK) | Async event streaming between Proxy Gateway, Audit Service, Alert Engine. Decouples evaluation path from audit write path. |
 | **Time-Series Metrics** | InfluxDB (or AWS Timestream) | Risk score timelines, cost analytics, per-model performance metrics for Dashboard |
@@ -287,7 +287,7 @@ controlplane.ai/
 
 | Layer | Technology | Rationale |
 |---|---|---|
-| **Dashboard + Policy Studio + Audit Vault UI** | Next.js 14 (App Router) + TypeScript | Server components for fast initial render. App Router for layout nesting (auth shell, dashboard shell). TypeScript for type safety across API boundary. |
+| **Dashboard + Policy Studio + Audit Vault UI** | Next.js 14 (App Router) + TypeScript | Server components for fast initial render. App Router for layout nesting. Streamlined passwordless UI provides instant access to the dynamic governance observability features. |
 | **Charting** | Recharts + D3.js | Recharts for standard time-series charts. D3 for custom compliance heatmaps and risk score visualizations. |
 | **Real-Time Live Feed** | WebSocket (native browser API) via Next.js API route proxy | Low-latency push from Kafka consumer to dashboard. |
 | **Styling** | Vanilla CSS + CSS custom properties (design tokens) | Maximum control over design system. No Tailwind lock-in. |

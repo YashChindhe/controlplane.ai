@@ -3,6 +3,8 @@
 import React, { useEffect, useState } from 'react';
 import DashboardLayout from '@/components/dashboard-layout';
 import { Shield, AlertTriangle, CheckCircle, Ban, ArrowRightLeft, Clock, Server, Layers } from 'lucide-react';
+import ProviderConfigPanel from '@/components/provider-config-panel';
+import TestPlayground from '@/components/test-playground';
 
 interface AuditEvent {
   eventId: string;
@@ -203,6 +205,14 @@ export default function LiveFeedPage() {
           </button>
         ))}
       </div>
+
+      {/* Embedded Provider Config & Test Playground (only when Mock Data is OFF) */}
+      {!useMockData && (
+        <div className="interactive-section">
+          <ProviderConfigPanel />
+          <TestPlayground />
+        </div>
+      )}
 
       {/* Feed List */}
       <div className="events-list">
@@ -511,6 +521,12 @@ export default function LiveFeedPage() {
           width: 48px;
           height: 48px;
           color: var(--text-tertiary);
+        }
+
+        .interactive-section {
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
         }
       `}</style>
     </DashboardLayout>
