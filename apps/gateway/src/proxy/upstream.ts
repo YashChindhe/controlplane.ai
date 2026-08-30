@@ -24,7 +24,7 @@ export async function resolveUpstream(request: FastifyRequest): Promise<Upstream
   let dynamicKey = null;
 
   try {
-    const res = await undiciRequest(`http://localhost:8001/api/providers/${tenantId}/${providerName}/credentials`);
+    const res = await undiciRequest(`http://127.0.0.1:8001/api/providers/${tenantId}/${providerName}/credentials`);
     if (res.statusCode === 200) {
       const data = await res.body.json() as any;
       dynamicUrl = data.base_url;
@@ -89,7 +89,7 @@ export async function proxyToUpstream(request: FastifyRequest, reply: FastifyRep
   // --- MOCK BYPASS FOR TEST PLAYGROUND ---
   // If the user uses the dummy test key, we return a mocked successful response 
   // so they can see the 'Accepted' flow in the Live Feed without needing a real OpenAI key.
-  if (headers['authorization'] === 'Bearer cp_test_tenant_default' || headers['x-api-key'] === 'cp_test_tenant_default') {
+  if ((headers['authorization'] === 'Bearer cp_test_tenant_default' || headers['x-api-key'] === 'cp_test_tenant_default') && model === 'mock') {
     request.log.info('Using Mock AI response for Test Playground');
     
     const userMessage = messages[messages.length - 1]?.content || '';
@@ -199,18 +199,68 @@ export async function proxyToUpstream(request: FastifyRequest, reply: FastifyRep
     const rawBody = await upstreamRes.body.text();
     const isError = upstreamRes.statusCode !== 200;
 
+    // Parse token usage and response text from the upstream response
+    let totalTokens = 0;
+    let responseText = rawBody;
+    if (!isError) {
+      try {
+        const parsed = JSON.parse(rawBody);
+        totalTokens = parsed?.usage?.total_tokens ?? 0;
+        responseText = parsed?.choices?.[0]?.message?.content ?? rawBody;
+      } catch {
+        // not JSON, leave defaults
+      }
+    }
+
+    // --- TRI-GUARD EVALUATION FOR NON-STREAMING RESPONSES ---
+    let perfScore = isError ? 0 : 100;
+    let hasPii = false;
+    let matchedEntities: string[] = [];
+    let costDensity = 1.0;
+    let action: 'pass' | 'flag' | 'block' | 'redact' = isError ? 'block' : 'pass';
+
+    if (!isError && responseText) {
+      try {
+        const triGuardUrl = process.env.TRI_GUARD_URL || 'http://127.0.0.1:8000';
+        const userMessage = messages.map((m: any) => m.content).join('\n');
+        const combinedText = `${userMessage}\n\n${responseText}`;
+        
+        const evalRes = await undiciRequest(`${triGuardUrl}/evaluate`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ text: combinedText, model }),
+        });
+        if (evalRes.statusCode === 200) {
+          const evalResult = await evalRes.body.json() as any;
+          perfScore = evalResult.performance?.score ?? 100;
+          costDensity = evalResult.cost?.density ?? 1.0;
+          hasPii = evalResult.responsibility?.has_pii ?? false;
+          matchedEntities = evalResult.responsibility?.matched_entities ?? [];
+          // Resolve action
+          if (hasPii) action = 'redact';
+          else if (perfScore < 50) action = 'block';
+          else if (perfScore < 70) action = 'flag';
+          else action = 'pass';
+          request.log.info({ perfScore, hasPii, matchedEntities, action, costDensity }, 'Tri-Guard evaluation complete for non-streaming response');
+        }
+      } catch (triGuardErr) {
+        request.log.warn(triGuardErr, 'Tri-Guard evaluation failed for non-streaming response (fail-open)');
+      }
+    }
+    // --- END TRI-GUARD EVALUATION ---
+
     publishAuditEvent({
       eventId: randomUUID(),
       tenantId,
       timestamp: new Date().toISOString(),
       model,
       request: { messages },
-      response: { text: isError ? `[Error ${upstreamRes.statusCode}] ${rawBody.substring(0, 100)}...` : rawBody, redacted: false, blocked: isError },
+      response: { text: responseText, redacted: hasPii, blocked: isError || action === 'block' },
       evaluation: {
-        performance: { score: isError ? 0 : 100 },
-        cost: { tokens: 0, density: 1.0 },
-        responsibility: { hasPii: false, matchedEntities: [] },
-        action: isError ? 'block' : 'pass'
+        performance: { score: perfScore },
+        cost: { tokens: totalTokens, density: costDensity },
+        responsibility: { hasPii, matchedEntities },
+        action
       }
     });
 

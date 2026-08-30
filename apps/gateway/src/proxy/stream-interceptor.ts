@@ -4,7 +4,7 @@ import { publishAuditEvent } from '../services/kafka.js';
 import { sendSlackAlert, sendPagerDutyAlert } from '../services/alert.js';
 import crypto from 'crypto';
 
-const TRI_GUARD_URL = process.env.TRI_GUARD_URL || 'http://localhost:8000';
+const TRI_GUARD_URL = process.env.TRI_GUARD_URL || 'http://127.0.0.1:8000';
 
 interface StreamInterceptorOptions {
   tenantId: string;
@@ -153,10 +153,12 @@ export function createInterceptorStream(
 
   async function evaluateWindowAsync(text: string): Promise<void> {
     try {
+      const userMessage = requestMessages?.map((m: any) => m.content).join('\n') || '';
+      const combinedText = `${userMessage}\n\n${text}`;
       const response = await undiciRequest(`${TRI_GUARD_URL}/evaluate`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ text, model }),
+        body: JSON.stringify({ text: combinedText, model }),
       });
 
       if (response.statusCode === 200) {

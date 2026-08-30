@@ -98,3 +98,16 @@ async def get_provider_credentials(tenant_id: str, provider_name: str, db: Async
         "base_url": provider.base_url,
         "api_key": decrypted_key
     }
+
+@router.delete("/{tenant_id}/{provider_name}")
+async def delete_provider(tenant_id: str, provider_name: str, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(TenantProvider).where(TenantProvider.tenant_id == tenant_id, TenantProvider.provider_name == provider_name)
+    )
+    provider = result.scalars().first()
+    if not provider:
+        raise HTTPException(status_code=404, detail="Provider not found")
+    await db.delete(provider)
+    await db.commit()
+    return {"status": "success", "message": "Provider deleted successfully"}
+

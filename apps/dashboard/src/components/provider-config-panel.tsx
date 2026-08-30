@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Key, Link as LinkIcon, CheckCircle } from 'lucide-react';
+import { Plus, Key, Link as LinkIcon, CheckCircle, Trash2 } from 'lucide-react';
 
 interface Provider {
   id: string;
@@ -69,6 +69,22 @@ export default function ProviderConfigPanel() {
     }
   };
 
+  const handleDeleteProvider = async (providerName: string) => {
+    try {
+      const res = await fetch(`http://localhost:8001/api/providers/${tenantId}/${providerName}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        setProviders(prev => prev.filter(p => p.provider_name !== providerName));
+        setMessage('Provider configuration deleted successfully!');
+      } else {
+        setMessage('API Error: Failed to delete provider');
+      }
+    } catch (err) {
+      setMessage('API Unreachable.');
+    }
+  };
+
   return (
     <div className="provider-panel-container">
       {message && (
@@ -127,9 +143,18 @@ export default function ProviderConfigPanel() {
               <div key={p.id} className="rule-card">
                 <div className="rule-header">
                   <span className="rule-title" style={{textTransform: 'capitalize'}}>{p.provider_name}</span>
-                  <span className={`status-badge production`}>
-                    Active
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span className={`status-badge production`}>
+                      Active
+                    </span>
+                    <button 
+                      onClick={() => handleDeleteProvider(p.provider_name)}
+                      className="delete-btn"
+                      title="Delete Provider"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                 </div>
 
                 <div className="rule-details" style={{display: 'flex', flexDirection: 'column'}}>
@@ -313,6 +338,24 @@ export default function ProviderConfigPanel() {
           background-color: var(--bg-base);
           padding: 1px 4px;
           border-radius: 4px;
+        }
+
+        .delete-btn {
+          background: none;
+          border: none;
+          color: var(--text-tertiary);
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 4px;
+          border-radius: 4px;
+          transition: all 0.2s;
+        }
+
+        .delete-btn:hover {
+          color: #ef4444;
+          background-color: rgba(239, 68, 68, 0.1);
         }
       `}</style>
     </div>

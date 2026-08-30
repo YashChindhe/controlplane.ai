@@ -12,7 +12,6 @@ Each milestone is a shippable unit — at the end of every milestone, the system
 
 ## Phase 1 — MVP: Real-Time Tri-Guard Engine + Core Platform
 
-**Target Duration**: 12 weeks (3 months)
 **Outcome**: A production-deployable enterprise SaaS that any company can integrate with a base URL change. Covers the full Tri-Guard interception loop, governance dashboard, basic policy studio, audit vault, and SDK.
 
 ---
@@ -164,12 +163,15 @@ Each milestone is a shippable unit — at the end of every milestone, the system
 - [x] Gateway is fully connected to Local Dev components (Postgres, Redpanda, Redis, Tri-Guard, Policy Service, and Audit Service).
 - [x] Dashboard UI pages (`Live Feed`, `Audit Vault`, `Policy Studio`, `Analytics`, `Compliance`) are 100% dynamically wired up to backend database models and Kafka events for tenant `default` instead of visual mocks.
 - [x] Sidebar role toggling works reactively across all routes via standard DOM storage event listeners without force-refreshing pages.
+- [x] Provider Configurations can be dynamically created and deleted from the UI, with changes instantly reflected in the Gateway.
+- [x] Tri-Guard evaluation explicitly covers both the user's prompt and the LLM's response, catching PII even if the LLM refuses to generate it.
+- [x] Gateway proxy successfully forwards to custom local providers (e.g., Ollama `qwen2.5:3b`) when `mock` mode is bypassed.
+- [x] Internal inter-service routing is hardened against IPv6 resolution errors (Node.js attempting to hit `::1` for IPv4 Python endpoints).
 
 ---
 
 ## Phase 2 — Enterprise Depth & Scale
 
-**Target Duration**: 12 weeks (Months 4–6)
 **Outcome**: Full enterprise feature set — SSO/RBAC, agentic workflow guard, RAG quality guard, self-hosted deployment, model benchmarking, advanced rerouting.
 
 ---

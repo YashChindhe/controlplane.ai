@@ -82,20 +82,32 @@ Implemented the core real-time observability UI and WebSocket connection:
 - Built the Compliance page (`/dashboard/compliance`) showing the regulation violation heatmap.
 - Created the WebSocket gateway in the proxy service to stream events from Kafka to dashboard clients.
 
+### Phase 1, Milestone 1.5 & 1.6 (Complete)
+- **Policy Studio & Audit Vault**: Implemented `apps/policy-service` for rule CRUD and `apps/audit-service` for querying logs. Wired up Policy Studio UI and Audit Vault UI in the Dashboard.
+- **SDKs & Integrations**: Created Python and Node.js SDKs, set up K8s manifests, and performed end-to-end load testing.
+
+### Phase 1, MVP Bug Fixes & Refinements (Session 6 — 2026-08-30)
+Hardened the MVP by resolving critical integration edge cases:
+- **Provider Management**: Added `DELETE` API to `policy-service` and wired it to the Dashboard UI's Trash button to allow dynamic removal of API keys.
+- **Model Routing**: Fixed the mock bypass condition in `upstream.ts` to strictly require `model === 'mock'`, allowing real custom local SLMs (e.g., Ollama) to be queried successfully.
+- **Tri-Guard Scope**: Updated both streaming and non-streaming proxy interception to evaluate the *concatenated user prompt and LLM response*. This ensures Tri-Guard flags PII in the prompt even if the LLM refuses to generate a PII response.
+- **Networking/IPv6 Fixes**: Modified `run-dev.ps1`, `upstream.ts`, `stream-interceptor.ts`, and `kafka.ts` to explicitly use `127.0.0.1` instead of `localhost`. This resolved recurring `ECONNREFUSED` errors caused by Node.js attempting to connect over IPv6 (`::1`) while Python/FastAPI services were bound to IPv4.
+
 ---
 
 ## Which Is Currently Being Worked On
 
-**Status: Phase 1, Milestone 1.4 Complete — Ready to begin Milestone 1.5: Policy Studio & Audit Vault.**
+**Status: Phase 1 (MVP) is 100% Complete — Ready to begin Phase 2, Milestone 2.1: SSO, RBAC & Multi-Tenant Hardening.**
 
-### Next Up: Phase 1, Milestone 1.5 — Policy Studio & Audit Vault
+### Next Up: Phase 2, Milestone 2.1 — SSO & RBAC
 
 **Sprint work items (do these in order):**
 
-1. [ ] Create `apps/policy-service` (FastAPI + PostgreSQL) for rule CRUD, versioning, deployment, and template library.
-2. [ ] Implement Policy Studio UI in `@controlplane/dashboard` with visual rule builder, version history, rule sandbox, and template library.
-3. [ ] Create `apps/audit-service` (FastAPI + Elasticsearch + S3 WORM) for consuming audit events and querying/exporting them.
-4. [ ] Implement Audit Vault UI in `@controlplane/dashboard` with searchable logs, detail modals, and CSV/PDF export options.
+1. [ ] Implement SAML 2.0 and OIDC SSO using `saml-jackson` integrated with NextAuth.js.
+2. [ ] Add Role-Based Access Control (Admin, Policy Author, Auditor, Viewer) logic in the Dashboard and API routes.
+3. [ ] Implement per-application API key scoping with granular permission flags in the Gateway.
+4. [ ] Build the tenant provisioning flow (signup → workspace setup).
+5. [ ] Add identity event logging (login, role change, key rotation) to the Audit Vault.
 
 ---
 

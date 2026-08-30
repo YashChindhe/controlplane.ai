@@ -2,7 +2,7 @@ import { Kafka, Producer } from 'kafkajs';
 import { request as undiciRequest } from 'undici';
 
 const kafkaBroker = process.env.KAFKA_BROKERS || 'localhost:19092';
-const auditServiceUrl = process.env.AUDIT_SERVICE_URL || 'http://localhost:8002';
+const auditServiceUrl = process.env.AUDIT_SERVICE_URL || 'http://127.0.0.1:8002';
 
 let producer: Producer | null = null;
 const eventListeners: ((event: Record<string, any>) => void)[] = [];

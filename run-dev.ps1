@@ -67,9 +67,9 @@ Set-Location '$RootPath'
 `$env:HOST = '0.0.0.0'
 `$env:REDIS_URL = 'redis://localhost:6379'
 `$env:KAFKA_BROKERS = 'localhost:19092'
-`$env:TRI_GUARD_URL = 'http://localhost:8000'
-`$env:POLICY_SERVICE_URL = 'http://localhost:8001'
-`$env:AUDIT_SERVICE_URL = 'http://localhost:8002'
+`$env:TRI_GUARD_URL = 'http://127.0.0.1:8000'
+`$env:POLICY_SERVICE_URL = 'http://127.0.0.1:8001'
+`$env:AUDIT_SERVICE_URL = 'http://127.0.0.1:8002'
 Write-Host 'Gateway: Starting Fastify on port 3000...' -ForegroundColor Cyan
 npm run dev --workspace=@controlplane/gateway
 "@
