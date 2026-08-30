@@ -14,7 +14,7 @@ import {
   Bar, 
   Legend 
 } from 'recharts';
-import { TrendingUp, DollarSign, Cpu, AlertTriangle } from 'lucide-react';
+import { TrendingUp, DollarSign, Cpu, AlertTriangle, Trash2 } from 'lucide-react';
 
 const MOCK_TIMELINE = [
   { time: '12:00', performance: 95, cost: 45, responsibility: 98 },
@@ -35,9 +35,16 @@ const MOCK_VOLUME = [
 
 export default function AnalyticsPage() {
   const [useMockData, setUseMockData] = React.useState(false);
+  const tenantId = 'default';
+  const [allRawEvents, setAllRawEvents] = React.useState<any[]>([]);
+  
+  // Filters
+  const [timeFilter, setTimeFilter] = React.useState('all');
+  const [modelFilter, setModelFilter] = React.useState('all');
+
   const [timelineData, setTimelineData] = React.useState<any[]>([]);
   const [volumeData, setVolumeData] = React.useState<any[]>([]);
-  const [kpis, setKpis] = React.useState({ latency: 0, efficiency: 0, spend: 0, blocked: 0 });
+  const [kpis, setKpis] = React.useState({ latency: 0, efficiency: 0, spend: 0, blocked: 0, totalEvents: 0 });
 
   React.useEffect(() => {
     const checkState = () => {
@@ -51,89 +58,179 @@ export default function AnalyticsPage() {
 
   React.useEffect(() => {
     async function fetchLiveData() {
-      if (useMockData) {
-        setTimelineData(MOCK_TIMELINE);
-        setVolumeData(MOCK_VOLUME);
-        setKpis({ latency: 38, efficiency: 84.2, spend: 184.22, blocked: 19 });
-        return;
-      }
+      if (useMockData) return; // handled by the other effect
 
       try {
         const res = await fetch('http://localhost:8002/audit', {
-          headers: { 'tenant-id': 'default' }
+          headers: { 'tenant-id': tenantId }
         });
         if (res.ok) {
           const data = await res.json();
-          const events = data.events || [];
-          
-          if (events.length === 0) {
-            setTimelineData([]);
-            setVolumeData([]);
-            setKpis({ latency: 0, efficiency: 0, spend: 0, blocked: 0 });
-            return;
-          }
-
-          // Compute KPIs
-          let totalDensity = 0;
-          let totalTokens = 0;
-          let blockedCount = 0;
-          
-          events.forEach((e: any) => {
-            const evalData = e.evaluation || {};
-            totalDensity += evalData.cost?.density || 1;
-            totalTokens += evalData.cost?.tokens || 0;
-            if (evalData.action === 'block') blockedCount++;
-          });
-
-          const avgEfficiency = (totalDensity / events.length) * 100;
-          const totalSpend = totalTokens * 0.00015; // Mock rate of $0.00015 per token
-
-          setKpis({ 
-            latency: 42, // Latency telemetry not yet in gateway emit
-            efficiency: parseFloat(avgEfficiency.toFixed(1)), 
-            spend: parseFloat(totalSpend.toFixed(4)), 
-            blocked: blockedCount 
-          });
-
-          // Compute Timeline Data (grouping sequentially for the demo)
-          const timeline = events.slice(0, 10).reverse().map((e: any, idx: number) => {
-            const evalData = e.evaluation || {};
-            return {
-              time: new Date(e.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-              performance: evalData.performance?.score || 100,
-              cost: Math.min((evalData.cost?.tokens || 0) * 2, 100), // Scaled for chart visibility
-              responsibility: evalData.responsibility?.hasPii ? 40 : 100
-            };
-          });
-          setTimelineData(timeline);
-
-          // Compute Volume Data grouped by Model
-          const modelMap: Record<string, any> = {};
-          events.forEach((e: any) => {
-            const model = e.model || 'unknown';
-            const action = e.evaluation?.action || 'pass';
-            if (!modelMap[model]) {
-              modelMap[model] = { name: model, safe: 0, flagged: 0, blocked: 0 };
-            }
-            if (action === 'pass') modelMap[model].safe++;
-            else if (action === 'block') modelMap[model].blocked++;
-            else modelMap[model].flagged++; // redact and flag
-          });
-          setVolumeData(Object.values(modelMap));
+          setAllRawEvents(data.events || []);
         }
       } catch (err) {
         console.error("Failed to fetch analytics:", err);
       }
     }
     fetchLiveData();
+    
+    // Auto-refresh every 10 seconds
+    const interval = setInterval(fetchLiveData, 10000);
+    return () => clearInterval(interval);
   }, [useMockData]);
+
+  // Compute metrics based on filters
+  React.useEffect(() => {
+    if (useMockData) {
+      setTimelineData(MOCK_TIMELINE);
+      setVolumeData(MOCK_VOLUME);
+      setKpis({ latency: 38, efficiency: 84.2, spend: 184.22, blocked: 19, totalEvents: 850 });
+      return;
+    }
+
+    let filtered = [...allRawEvents];
+
+    // Apply Time Filter
+    const now = new Date().getTime();
+    if (timeFilter !== 'all') {
+      const hours = timeFilter === '1h' ? 1 : (timeFilter === '24h' ? 24 : 168); // 168 = 7d
+      const cutoff = now - (hours * 60 * 60 * 1000);
+      filtered = filtered.filter(e => new Date(e.timestamp).getTime() >= cutoff);
+    }
+
+    // Apply Model Filter
+    if (modelFilter !== 'all') {
+      filtered = filtered.filter(e => e.model === modelFilter);
+    }
+
+    if (filtered.length === 0) {
+      setTimelineData([]);
+      setVolumeData([]);
+      setKpis({ latency: 0, efficiency: 0, spend: 0, blocked: 0, totalEvents: 0 });
+      return;
+    }
+
+    // Compute KPIs
+    let totalDensity = 0;
+    let totalTokens = 0;
+    let blockedCount = 0;
+    
+    filtered.forEach((e: any) => {
+      const evalData = e.evaluation || {};
+      totalDensity += evalData.cost?.density || 1;
+      totalTokens += evalData.cost?.tokens || 0;
+      if (evalData.action === 'block') blockedCount++;
+    });
+
+    const avgEfficiency = (totalDensity / filtered.length) * 100;
+    const totalSpend = totalTokens * 0.00015; // Mock rate
+
+    setKpis({ 
+      latency: 42,
+      efficiency: parseFloat(avgEfficiency.toFixed(1)), 
+      spend: parseFloat(totalSpend.toFixed(4)), 
+      blocked: blockedCount,
+      totalEvents: filtered.length
+    });
+
+    // Compute Timeline Data (taking up to 15 recent events)
+    const timeline = filtered.slice(-15).map((e: any) => {
+      const evalData = e.evaluation || {};
+      return {
+        time: new Date(e.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        performance: evalData.performance?.score || 100,
+        cost: Math.min((evalData.cost?.tokens || 0) * 2, 100),
+        responsibility: evalData.responsibility?.hasPii ? 40 : 100
+      };
+    });
+    setTimelineData(timeline);
+
+    // Compute Volume Data
+    const modelMap: Record<string, any> = {};
+    filtered.forEach((e: any) => {
+      const model = e.model || 'unknown';
+      const action = e.evaluation?.action || 'pass';
+      if (!modelMap[model]) {
+        modelMap[model] = { name: model, safe: 0, flagged: 0, blocked: 0 };
+      }
+      if (action === 'pass') modelMap[model].safe++;
+      else if (action === 'block') modelMap[model].blocked++;
+      else modelMap[model].flagged++;
+    });
+    setVolumeData(Object.values(modelMap));
+
+  }, [useMockData, allRawEvents, timeFilter, modelFilter]);
+
+  // Extract unique models for the dropdown
+  const uniqueModels = React.useMemo(() => {
+    const models = new Set<string>();
+    allRawEvents.forEach(e => {
+      if (e.model) models.add(e.model);
+    });
+    return Array.from(models);
+  }, [allRawEvents]);
+
+  const handleClearHistory = async () => {
+    // Optimistically clear the UI immediately
+    setAllRawEvents([]);
+    
+    try {
+      await fetch('http://localhost:8002/audit', {
+        method: 'DELETE',
+        headers: { 'tenant-id': tenantId }
+      });
+    } catch (err) {
+      console.warn("Backend is offline, but UI was cleared.");
+    }
+  };
 
   return (
     <DashboardLayout>
       <div className="page-header">
-        <div>
-          <h1 className="page-title">Operational Analytics</h1>
-          <p className="page-subtitle">Historical performance and cost metrics for active endpoints</p>
+        <div className="header-content">
+          <div>
+            <h1 className="page-title">Operational Analytics</h1>
+            <p className="page-subtitle">Historical performance and cost metrics for active endpoints</p>
+          </div>
+          
+          {/* Context Badge */}
+          <div className="context-badge">
+            <span className="context-label">Analyzing:</span>
+            <strong>{kpis.totalEvents} events</strong>
+            <span className="context-detail">
+              ({timeFilter === 'all' ? 'All Time' : timeFilter === '1h' ? 'Last Hour' : timeFilter === '24h' ? 'Last 24 Hours' : 'Last 7 Days'} • {modelFilter === 'all' ? 'All Models' : modelFilter})
+            </span>
+          </div>
+        </div>
+
+        {/* Filters UI */}
+        <div className="filters-bar">
+          <div className="filter-group-container">
+            <div className="filter-group">
+              <label>Timeframe</label>
+              <select value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)}>
+                <option value="1h">Last 1 Hour</option>
+                <option value="24h">Last 24 Hours</option>
+                <option value="7d">Last 7 Days</option>
+                <option value="all">All Time</option>
+              </select>
+            </div>
+
+            <div className="filter-group">
+              <label>Model Endpoint</label>
+              <select value={modelFilter} onChange={(e) => setModelFilter(e.target.value)}>
+                <option value="all">All Models</option>
+                {uniqueModels.map(model => (
+                  <option key={model} value={model}>{model}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <button className="clear-btn" onClick={handleClearHistory} disabled={useMockData}>
+            <Trash2 size={16} />
+            <span>Clear History</span>
+          </button>
         </div>
       </div>
 
@@ -333,6 +430,102 @@ export default function AnalyticsPage() {
 
         .font-mono {
           font-family: var(--font-mono);
+        }
+
+        .header-content {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          margin-bottom: 24px;
+        }
+
+        .context-badge {
+          background: rgba(59, 130, 246, 0.1);
+          border: 1px solid rgba(59, 130, 246, 0.2);
+          padding: 8px 16px;
+          border-radius: 20px;
+          font-size: 13px;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          color: var(--color-brand-blue);
+        }
+
+        .context-label {
+          color: var(--text-secondary);
+        }
+
+        .context-detail {
+          color: var(--text-tertiary);
+        }
+
+        .filters-bar {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          background: var(--bg-surface-1);
+          padding: 16px;
+          border-radius: var(--radius-md);
+          border: 1px solid var(--border-subtle);
+        }
+
+        .filter-group-container {
+          display: flex;
+          gap: 16px;
+        }
+
+        .filter-group {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+
+        .filter-group label {
+          font-size: 12px;
+          font-weight: 600;
+          color: var(--text-secondary);
+          text-transform: uppercase;
+        }
+
+        .filter-group select {
+          background-color: var(--bg-surface-2);
+          border: 1px solid var(--border-default);
+          color: var(--text-primary);
+          padding: 8px 12px;
+          border-radius: var(--radius-md);
+          font-size: 13px;
+          cursor: pointer;
+        }
+
+        .filter-group select:focus {
+          outline: 1px solid var(--color-brand-blue);
+        }
+
+        .clear-btn {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          background: transparent;
+          color: var(--color-brand-red);
+          border: 1px solid rgba(239, 68, 68, 0.3);
+          padding: 8px 16px;
+          border-radius: var(--radius-md);
+          font-size: 13px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .clear-btn:hover:not(:disabled) {
+          background: rgba(239, 68, 68, 0.1);
+          border-color: var(--color-brand-red);
+        }
+
+        .clear-btn:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+          color: var(--text-tertiary);
+          border-color: var(--border-default);
         }
       `}</style>
     </DashboardLayout>

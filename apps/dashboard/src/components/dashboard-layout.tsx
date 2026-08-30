@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Sidebar from '../components/sidebar';
-import { Sun, Moon, Bell } from 'lucide-react';
+import { Sun, Moon } from 'lucide-react';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -10,7 +10,6 @@ interface DashboardLayoutProps {
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
-  const [showNotifications, setShowNotifications] = useState(false);
 
   const toggleTheme = () => {
     const nextTheme = theme === 'dark' ? 'light' : 'dark';
@@ -31,29 +30,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             <button className="icon-btn theme-toggle" onClick={toggleTheme} title="Toggle Theme">
               {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
             </button>
-            <div style={{ position: 'relative' }}>
-              <button 
-                className="icon-btn notifications-btn" 
-                title="System Alerts"
-                onClick={() => setShowNotifications(!showNotifications)}
-              >
-                <Bell size={18} />
-                <span className="badge-count">1</span>
-              </button>
-              {showNotifications && (
-                <div className="notifications-popover">
-                  <div className="popover-header">
-                    <h4>Notifications</h4>
-                  </div>
-                  <div className="popover-content">
-                    <div className="notification-item unread">
-                      <p className="notification-text">System update scheduled for 2:00 AM UTC</p>
-                      <span className="notification-time">10 min ago</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
           </div>
         </header>
         <main className="content-container">

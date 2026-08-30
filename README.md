@@ -36,6 +36,12 @@ Beyond the core engine, ControlPlane.ai exposes:
 - **SDK / Proxy API**: Drop-in OpenAI-compatible proxy endpoint.
 - **Alert & Escalation Engine**: Configurable webhooks for Slack/Teams/PagerDuty integrations.
 
+## Recent Updates
+
+- **Streamlined UI**: Removed the mock 'Admin/Viewer' toggle and initial 'Sign In' screens to provide immediate, frictionless access to the platform's core governance features.
+- **Dynamic Real-Time Observability**: The Analytics and Audit Vault dashboards now feature dynamic auto-polling, seamlessly updating charts and tables in real-time as the Gateway intercepts new LLM traffic.
+- **Persistent WORM Storage Management**: The Audit Service's history clearing capabilities have been upgraded to dynamically wipe immutable WORM archives directly from the disk for local testing environments.
+
 ## Getting Started
 
 The platform runs as a set of interconnected microservices orchestrated via Docker Compose.

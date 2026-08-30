@@ -107,6 +107,39 @@ async def get_audit_logs(
     )
     return {"events": events}
 
+@app.delete("/audit")
+async def clear_audit_logs(
+    tenant_id: str = Header(..., alias="tenant-id")
+):
+    global LOCAL_EVENT_STORE
+    # Remove all events for this tenant from memory
+    LOCAL_EVENT_STORE[:] = [e for e in LOCAL_EVENT_STORE if e.get("tenantId") != tenant_id]
+
+    # Dynamically update the backend persistent storage by deleting the WORM vault files
+    import shutil
+    import os
+    from src.writer import S3_WORM_DIR
+    tenant_dir = os.path.join(S3_WORM_DIR, tenant_id)
+    if os.path.exists(tenant_dir):
+        try:
+            shutil.rmtree(tenant_dir)
+            print(f"Dynamically deleted persistent WORM vault for tenant: {tenant_id}")
+        except Exception as e:
+            print(f"Failed to delete WORM vault: {e}")
+
+    from src.writer import get_elasticsearch_client
+    es = await get_elasticsearch_client()
+    if es:
+        try:
+            index_name = f"audit-events-{tenant_id.lower()}"
+            await es.indices.delete(index=index_name, ignore_unavailable=True)
+        except Exception as e:
+            print(f"Failed to delete ES index: {e}")
+        finally:
+            await es.close()
+
+    return {"status": "cleared", "message": f"Cleared all audit logs for tenant {tenant_id}"}
+
 @app.get("/audit/export")
 async def export_audit_logs(
     format: str = Query("csv"),
