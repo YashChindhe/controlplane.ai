@@ -49,7 +49,10 @@ export async function resolveUpstream(request: FastifyRequest): Promise<Upstream
   }
 
   // OpenAI or Custom format (both use Bearer auth generally)
-  const url = dynamicUrl || 'https://api.openai.com/v1/chat/completions';
+  const url = dynamicUrl || (providerName === 'openai' 
+    ? 'https://api.openai.com/v1/chat/completions' 
+    : 'http://127.0.0.1:11434/v1/chat/completions'); // default to local Ollama
+
   return {
     url,
     headers: {

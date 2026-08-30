@@ -108,7 +108,7 @@ export default function LiveFeedPage() {
     function connect() {
       if (!isMounted) return;
 
-      ws = new WebSocket('ws://localhost:3000/ws/events');
+      ws = new WebSocket('ws://127.0.0.1:3000/ws/events');
 
       ws.onopen = () => {
         if (!isMounted) return;
